@@ -1,0 +1,13 @@
+{
+  "name": "jardim-orbital",
+  "private": true,
+  "description": "Low-gravity procedural planets in first person, rendered with WebGPU, bundled into one HTML file",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:readable": "node build.mjs --readable"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
