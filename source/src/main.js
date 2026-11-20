@@ -372,7 +372,7 @@ document.querySelectorAll('#q button').forEach((b, i) => {
 const lkS = [0, 0];
 // aura: the high-speed mode (Shift). It does not burn anything: a glow gathers around you and you steer like a ship.
 // Holding one direction builds acceleration; to brake, push the other way. No automatic braking out in space.
-let aura = 0, auraSpeed = 0, auraHold = 0, auraDir = [0, 0, 0], shake = 0, flash = 0, brakeLock = 0;
+let lastJump = -99, launchT = 0, aura = 0, auraSpeed = 0, auraHold = 0, auraDir = [0, 0, 0], shake = 0, flash = 0, brakeLock = 0;
 // the silver cord: hooks the ground you look at and reels you in, softly
 const cord = { on: false, a: [0, 0, 0], len: 0, t: 0 };
 // black hole: bhNear 0..1 as you approach, bhIn 0..1 while crossing it
@@ -493,7 +493,7 @@ function step(dt) {
       // walking: answers quickly, with just a little glide when you start and stop
       const sp = 4.2, vr = dot3(vel, up), vn = min(vr, 0) - gm * dt, k = 1 - exp(-dt * 7), tw = [wx * sp, wy * sp, wz * sp];
       for (let i = 0; i < 3; i++) { const vt = vel[i] - up[i] * vr; vel[i] = vt + (tw[i] - vt) * k + up[i] * vn; }
-      if (jumpReq) { for (let i = 0; i < 3; i++) vel[i] += up[i] * 5.5; groundT = 0; }
+      if (jumpReq) { for (let i = 0; i < 3; i++) vel[i] += up[i] * 5.5; groundT = 0; lastJump = time; jumpReq = 0; }
       airAim = null;
       airAim = null;
     } else {
@@ -517,12 +517,20 @@ function step(dt) {
       // holding Space in the air: you glide, falling slower
       if (kj) { const vn = dot3(vel, up); if (vn < 0) for (let i = 0; i < 3; i++) vel[i] -= up[i] * vn * min(1, dt * 1.5); }
       // let go of the aura and you glide on, slowing down until you nearly stop
-      let drag = 0.45;
+      let drag = launchT > 0 ? 0.01 : 0.45;
       if (inWater) { drag = 2.2; for (let i = 0; i < 3; i++) vel[i] += up[i] * gm * 1.25 * dt; }
       const kk = exp(-drag * dt); for (let i = 0; i < 3; i++) vel[i] *= kk;
     }
   }
+  // a second jump in the air, soon after the first: thrown clear of the planet, even a heavy one (out of craters)
+  if (jumpReq && groundT <= 0 && time - lastJump < 1.6 && near >= 0 && !auraOn) {
+    const p = PL[near], ri = p.R + p.hmax + 75, vesc = sqrt(2 * p.g * p.R * max(0.2, 1 - p.R / ri));
+    const v = vesc * 1.3 + 6;
+    for (let i = 0; i < 3; i++) vel[i] = up[i] * v + look[i] * 4;
+    launchT = 6; lastJump = -99; flash = max(flash, 0.25); speakSound('cord');
+  }
   jumpReq = 0;
+  launchT = max(0, launchT - dt);
   // the silver cord pulls like a loose elastic and reels in; it goes around any planet in the way
   if (cord.on) {
     cord.t += dt;
@@ -867,7 +875,7 @@ function minv(m) {
 }
 const tmp3 = [0, 0, 0];
 let fovNow = 1.25, expo = 1, lastVP = null;
-const MOOD_EXPO = { leve: 1.08, enigmatico: 0.95, sinistro: 0.72 };
+const MOOD_EXPO = { leve: 1.08, enigmatico: 0.95, sinistro: 0.72 }, FEEL_EXPO = { arrependimento: 0.42 };
 function uniforms(cq) {
   // the view widens with speed and inside the black hole, and shakes with speed and near the hole
   const spd = hypot(vel[0], vel[1], vel[2]);
@@ -883,7 +891,7 @@ function uniforms(cq) {
   P[0] = f / asp; P[5] = f; P[11] = -1; P[14] = NEAR;
   // the light follows the mood of the planet you are near
   let et = END.stage === 'shore' ? 0.85 : 1;
-  if (END.stage !== 'shore') for (const p of PL) { const w = sstep(p.hmax + 160, p.hmax + 30, hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]) - p.R); et = mix(et, MOOD_EXPO[p.mood], w); }
+  if (END.stage !== 'shore') for (const p of PL) { const w = sstep(p.hmax + 160, p.hmax + 30, hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]) - p.R); et = mix(et, FEEL_EXPO[p.feel] || MOOD_EXPO[p.mood], w); }
   expo += (et - expo) * 0.02;
   const vp = mmul(P, V), ivp = minv(vp);
   UG.set(vp, 0); UG.set(ivp, 16);
@@ -905,7 +913,7 @@ function uniforms(cq) {
   // lights: the lamp, then the nearest spirits
   const L = [];
   // you are an orb of light that cannot see itself: a soft glow all around you, always
-  if (!VISION) L.push([pos[0], pos[1], pos[2], 1.25, 1, 0.94, 0.86, 24, 0]);
+  if (!VISION) L.push([pos[0], pos[1], pos[2], 8, 1, 0.94, 0.86, 50, 0]);
   // the aura lights the ground you skim over
   if (aura > 0.05) L.push([pos[0] - u[0] * 0.5, pos[1] - u[1] * 0.5, pos[2] - u[2] * 0.5, 2.5 * aura, 0.6, 0.7, 1.3, 26, 0]);
   const shoreNow = END.stage === 'shore';

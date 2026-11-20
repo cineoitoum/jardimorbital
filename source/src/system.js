@@ -54,6 +54,8 @@ function makeSystem(seed, count = 5) {
   for (let i = 0; i < count; i++) {
     const biome = order[i % order.length], pal = PALETTES[biome]();
     const feel = feels[i % feels.length], mood = STORY[feel].mood;
+    // regret is the darkest place: near-black ground, a faint cold glow, almost no air
+    if (feel === 'arrependimento') { for (const k of [0, 1, 2, 3, 4, 8, 9, 10]) pal.col[k] = '#' + hex(pal.col[k]).map((c) => round(c * 255 * 0.3).toString(16).padStart(2, '0')).join(''); pal.dens *= 0.4; pal.atm = '#1a2a4a'; }
     const dark = mood === 'sinistro';
     if (dark) { for (const k of [0, 1, 2, 3, 4, 8, 9]) pal.col[k] = '#' + hex(pal.col[k]).map((c) => round(c * 255 * 0.62).toString(16).padStart(2, '0')).join(''); pal.dens *= 1.3; }
     const R = rr(62, 92);
