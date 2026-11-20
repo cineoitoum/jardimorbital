@@ -66,7 +66,7 @@ const meshBuf = (m) => ({ vb: buf(new Uint8Array(m.vb), BU.VERTEX), ib: buf(m.ib
 const mFig = meshBuf(FIG), mSeat = meshBuf(SEAT), mCol = meshBuf(COLM), mRock = meshBuf(ROCK), mOcean = meshBuf(OCEAN);
 
 // ---------------------------------------------------------------- uniforms
-const NG = 296, UG = new Float32Array(NG), uboG = device.createBuffer({ size: NG * 4, usage: BU.UNIFORM | BU.COPY_DST });
+const NG = 300, UG = new Float32Array(NG), uboG = device.createBuffer({ size: NG * 4, usage: BU.UNIFORM | BU.COPY_DST });
 const bgl0 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.VERTEX | SS.FRAGMENT, buffer: {} }] });
 const bgl1 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.VERTEX | SS.FRAGMENT, buffer: {} }] });
 const plScene = device.createPipelineLayout({ bindGroupLayouts: [bgl0, bgl1] });
@@ -117,7 +117,7 @@ for (const p of PL) {
     const col = [mix(1, 0.75, s.hue), mix(0.82, 0.88, s.hue), mix(0.5, 1, s.hue)];
     lightsStatic.push([s.p[0] + s.u[0] * 0.8, s.p[1] + s.u[1] * 0.8, s.p[2] + s.u[2] * 0.8, lum ? 2.6 : 0.9, ...col, 16]);
     const at = [s.p[0] + s.u[0] * 1.1, s.p[1] + s.u[1] * 1.1, s.p[2] + s.u[2] * 1.1];
-    souls.push({ pos: (o) => { o[0] = at[0]; o[1] = at[1]; o[2] = at[2]; return o; }, kind: soulKind(), said: new Set(), cool: 0, scale: 1 });
+    souls.push({ pos: (o) => { o[0] = at[0]; o[1] = at[1]; o[2] = at[2]; return o; }, kind: soulKind(), said: new Set(), cool: 0, scale: 1, feel: p.feel });
   }
   g.st = buf(new Float32Array(st), BU.VERTEX); g.sn = st.length / 16;
   PD.push(g);
@@ -130,6 +130,9 @@ for (const p of PL) {
     spirits.push(orbitSpirit(p.c, p.R + p.A * 0.6 + (low ? rr(3, 9) : rr(14, 26)), low ? rr(0.7, 1.4) : rr(2, 3.5), low ? rr(1, 1.6) : rr(1.3, 2.4), 0, rnd(), glow));
   }
   p.seatedPos = w.seated;
+  p.beacon = w.beacon;
+  if (p.beacon) { const b = p.beacon, c = VIS_ENV[p.feel].beam; lightsStatic.push([b.p[0] + b.u[0] * 1.9, b.p[1] + b.u[1] * 1.9, b.p[2] + b.u[2] * 1.9, 6, 1 + c[0] * 0.15, 1 + c[1] * 0.15, 1 + c[2] * 0.15, 20]); }
+  const nsp0 = spirits.length;
   await new Promise((r) => setTimeout(r));
 }
 // spirits crossing the space between the planets, and one crystal astronaut
@@ -142,7 +145,8 @@ for (const p of PL) {
   spirits.push(orbitSpirit(h.c, h.R + h.hmax + 45, 2, 2.2, 2, 0, 1));
 }
 // every orbiting soul can speak too (the crystal astronaut is one of the old ones)
-spirits.forEach((sp, i) => souls.push({ pos: (o) => orbitAt(spiritArr, i * 16, time, o), kind: sp[13] > 1.5 ? 7 : soulKind(), said: new Set(), cool: 0, scale: sp[12] }));
+// orbiting souls belong to the planet they circle (the first five per planet), and share its feeling
+spirits.forEach((sp, i) => { const pl = i < PL.length * 5 ? PL[i / 5 | 0] : null; souls.push({ pos: (o) => orbitAt(spiritArr, i * 16, time, o), kind: sp[13] > 1.5 ? 7 : soulKind(), said: new Set(), cool: 0, scale: sp[12], feel: pl && pl.feel }); });
 const spiritArr = new Float32Array(spirits.flat());
 const bSpirit = buf(spiritArr, BU.VERTEX), nSpirit = spirits.length;
 // trails: 160 sparks per spirit (none for the astronaut)
@@ -178,6 +182,9 @@ const pProp = scenePipe(mProp, 'vs', 'fs', [vbSolid, inst(48, 3, 2)]);
 const pSpirit = scenePipe(mSpir, 'vs', 'fs', [vbSolid, inst(64, 4, 2)]);
 const pSpiritT = scenePipe(mSpir, 'vs', 'fsT', [vbSolid, inst(64, 4, 2)], { blend: ALPHA, cull: 'back' });
 const pCord = scenePipe(mSpr, 'vsCord', 'fs', [inst(32, 2)], { strip: true, blend: ADD });
+const mVis = mod(W_VIS), mVisSky = mod(W_VISSKY);
+const pVis = scenePipe(mVis, 'vs', 'fs', [vbSolid, inst(64, 4, 2)]);
+const pVisSky = scenePipe(mVisSky, 'vs', 'fs', [], { dw: false, dc: 'always' });
 const pGlint = scenePipe(mSpr, 'vsGlint', 'fs', [inst(32, 2)], { strip: true, blend: ADD });
 const pDust = scenePipe(mSpr, 'vsDust', 'fs', [inst(32, 2)], { strip: true, blend: ADD });
 const pTrail = scenePipe(mSpr, 'vsTrail', 'fs', [inst(80, 5)], { strip: true, blend: ADD });
@@ -191,7 +198,7 @@ const pDown0 = blitPipe('fsDown0'), pDown = blitPipe('fsDown'), pUp = blitPipe('
 const pPost = device.createRenderPipeline({ layout: 'auto', vertex: { module: mPost, entryPoint: 'vs' }, fragment: { module: mPost, entryPoint: 'fs', targets: [{ format: FMT }] } });
 const sClamp = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
 // surface compile errors before the scene starts (any one would leave the screen black)
-for (const m of [mSky, mTerr, mOce, mBlade, mProp, mSpir, mSpr, mAtm, mBlit, mPost, mDens]) {
+for (const m of [mSky, mTerr, mOce, mBlade, mProp, mSpir, mSpr, mAtm, mBlit, mPost, mDens, mVis, mVisSky]) {
   const ci = await m.getCompilationInfo();
   for (const msg of ci.messages) if (msg.type === 'error') fail(`Shader: ${msg.message} (linha ${msg.lineNum})`);
 }
@@ -311,17 +318,21 @@ function collide(mv, up) {
 }
 
 // ---------------------------------------------------------------- input
-let kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, kj = 0, jumpReq = 0, mdx = 0, mdy = 0, menu = true, hud = false;
+let kbr = 0, kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, kj = 0, jumpReq = 0, mdx = 0, mdy = 0, menu = true, hud = false;
 const key = (e, v) => {
   switch (e.code) {
     case 'KeyW': kf = v; break; case 'KeyS': kb = v; break; case 'KeyA': kl = v; break; case 'KeyD': kr = v; break;
     case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
     case 'KeyR': if (v && !e.repeat) { if (cord.on) cord.on = false; else castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])); } break;
-    case 'Space': if (v && !kj) jumpReq = 1; kj = v; e.preventDefault(); break;
+    case 'Space': if (v && !kj) { jumpReq = 1; if (VISION) leaveVision(); } kj = v; e.preventDefault(); break;
+    case 'KeyB': kbr = v; break;
     default: if (v && !e.repeat) {
       if (e.code === 'KeyH') { hud = !hud; info.textContent = ''; }
       else if (e.code === 'KeyM') mute();
-      else if (e.code === 'KeyF') lamp = !lamp;
+      else if (e.code === 'KeyL') lamp = !lamp;
+      else if (e.code === 'KeyF') interact();
+      else if (e.code === 'KeyJ') diary(!diaryOpen);
+      else if (e.code === 'KeyP') photo();
       else if (e.code === 'Escape') ui(true);
       else if (e.code >= 'Digit1' && e.code <= 'Digit9') { const i = e.code.charCodeAt(5) - 49; if (i < PL.length) spawn(i, true); }
     }
@@ -386,6 +397,7 @@ function step(dt) {
   pitch = clamp(pitch - dpt, -1.5, 1.5);
   if (trav) return crossing(dt);
   if (END.stage !== 'play') return endingStep(dt);
+  if (VISION) return visionStep(dt);
   // gravity: turn the body so its feet point down the pull (slowly while in aura: you steer more like a ship)
   gravity(PL, pos[0], pos[1], pos[2], gv, BH);
   const gm = hypot(gv[0], gv[1], gv[2]);
@@ -554,24 +566,28 @@ function endingStep(dt) {
 const CHORUS = Array.from({ length: 7 }, () => { const e = document.createElement('div'); e.className = 'tk'; document.body.appendChild(e); return { e, at: null, t: 99, dur: 0 }; });
 let chorusNext = 3, chorusSaid = new Set();
 function chorus(dt) {
-  if (END.t < 6) return;
+  chorusRun(dt, SHORE.voices, () => {
+    let line; for (let k = 0; k < 6; k++) { line = PAZ_MUNDO[rnd() * PAZ_MUNDO.length | 0]; if (!chorusSaid.has(line)) break; }
+    chorusSaid.add(line); if (chorusSaid.size > PAZ_MUNDO.length * 0.7) chorusSaid.clear();
+    return line;
+  }, END.t > 6, 90);
+}
+// words appearing beside points in view (souls at the shore, things in a vision), several at once
+// pts: world positions (or, inside a vision, positions relative to its origin, turned with the scene)
+function chorusRun(dt, pts, pick, on, range) {
   const cq = qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), look = qrot(cq, [0, 0, -1]);
-  if ((chorusNext -= dt) <= 0) {
+  const W = (v) => { if (!VISION) return v; const a = time * 0.012, c = cos(a), s = sin(a), o = VISION.V.origin; return [o[0] + c * v[0] + s * v[2], o[1] + v[1], o[2] - s * v[0] + c * v[2]]; };
+  if (on && (chorusNext -= dt) <= 0) {
     chorusNext = rr(0.8, 2.6);
     const free = CHORUS.find((c) => c.t > c.dur);
-    // a soul in view that is not already speaking
-    const vis = SHORE.voices.filter((v) => { const d = [v[0] - pos[0], v[1] - pos[1], v[2] - pos[2]], l = hypot(...d); return l < 90 && dot3(d, look) / l > 0.55 && !CHORUS.some((c) => c.t < c.dur && c.at === v); });
-    if (free && vis.length) {
-      let line; for (let k = 0; k < 6; k++) { line = PAZ_MUNDO[rnd() * PAZ_MUNDO.length | 0]; if (!chorusSaid.has(line)) break; }
-      chorusSaid.add(line); if (chorusSaid.size > PAZ_MUNDO.length * 0.7) chorusSaid.clear();
-      free.at = vis[rnd() * vis.length | 0]; free.t = 0; free.dur = rr(4.5, 7); free.e.textContent = line;
-    }
+    const vis = pts.filter((v) => { const w = W(v), d = [w[0] - pos[0], w[1] - pos[1], w[2] - pos[2]], l = hypot(...d); return l < range && dot3(d, look) / l > 0.55 && !CHORUS.some((c) => c.t < c.dur && c.at === v); });
+    if (free && vis.length) { free.at = vis[rnd() * vis.length | 0]; free.t = 0; free.dur = rr(4.5, 7); free.e.textContent = pick(); }
   }
   const m = lastVP;
   for (const c of CHORUS) {
     c.t += dt;
     if (!c.at || c.t > c.dur) { c.e.className = 'tk'; continue; }
-    const [x, y, z] = c.at, cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+    const [x, y, z] = W(c.at), cw = m[3] * x + m[7] * y + m[11] * z + m[15];
     if (cw < 0.1) { c.e.className = 'tk'; continue; }
     const sx = ((m[0] * x + m[4] * y + m[8] * z + m[12]) / cw * 0.5 + 0.5) * innerWidth, sy = (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw * 0.5) * innerHeight;
     c.e.style.left = sx + 'px'; c.e.style.top = (sy - c.t * 6) + 'px';
@@ -586,6 +602,90 @@ function sunWatch(dt, look) {
   if (!END.crossed) END.sunT = min(END.sunT, 6);
   END.glare = sstep(2, 11, END.sunT) * (END.crossed ? 1 : 0.35 / sstep(2, 11, 6));
   if (END.crossed && END.sunT >= 12) startCorridor();
+}
+// ---------------------------------------------------------------- the points of light and the visions
+// On each planet a point of light: come close and press F to look inward. You become a still point in a small
+// symbolic scene of that feeling, look anywhere, and stay as long as you like; memories surface one at a time
+// and words float beside the things. F or Space brings you back.
+let VISION = null;
+const VISCACHE = {}, VIS_MESH = visMeshes().map(meshBuf);
+const promptEl = $('pr'), fragEl = $('vf');
+function visionData(feel) {
+  if (VISCACHE[feel]) return VISCACHE[feel];
+  // drawn on its own, so it can sit at the origin, where float precision is best
+  const env = VIS_ENV[feel], origin = [0, 0, 0];
+  const parts = visionScene(feel), by = [[], [], []], pts = [];
+  for (const q of parts) {
+    const [m, x, y, z, sx, sy, sz, rq, col, em, ph, amp] = q;
+    by[m].push(x, y, z, em, sx, sy, sz, ph, ...rq, ...col, amp);
+    if (em > 0.15 || rnd() < 0.15) pts.push([x, y, z]);
+  }
+  const U = new Float32Array(56);
+  U.set([...origin, 1, 0, 6, 0, 0]);
+  [env.top, env.bottom, env.fog, env.key].forEach((h, i) => U.set([...hex(h).map((c) => pow(c, 2.2)), 0], 8 + i * 4));
+  return (VISCACHE[feel] = {
+    feel, origin, pts, bg: device.createBindGroup({ layout: bgl1, entries: [{ binding: 0, resource: { buffer: buf(U, BU.UNIFORM) } }] }),
+    inst: by.map((a) => ({ b: buf(new Float32Array(a), BU.VERTEX), n: a.length / 16 })),
+  });
+}
+function nearBeacon() {
+  for (const p of PL) { const b = p.beacon; if (b && hypot(pos[0] - b.p[0] - b.u[0] * 1.9, pos[1] - b.p[1] - b.u[1] * 1.9, pos[2] - b.p[2] - b.u[2] * 1.9) < 5) return p; }
+  return null;
+}
+function interact() {
+  if (VISION) return leaveVision();
+  if (END.stage !== 'play' || trav) return;
+  const p = nearBeacon(); if (p) enterVision(p.feel);
+}
+function enterVision(feel) {
+  const V = visionData(feel);
+  VISION = { V, feel, t: 0, next: 2, saved: { pos: Array.from(pos), vel: Array.from(vel), B: B.slice(), pitch } };
+  for (let k = 0; k < 3; k++) { pos[k] = V.origin[k]; vel[k] = 0; }
+  B = [0, 0, 0, 1]; pitch = 0; cord.on = false; aura = 0; flash = 0.8;
+  promptEl.className = ''; speakSound('thought');
+}
+function leaveVision() {
+  const S = VISION.saved;
+  for (let k = 0; k < 3; k++) { pos[k] = S.pos[k]; vel[k] = 0; }
+  B = S.B; pitch = S.pitch; VISION = null; flash = 0.6;
+  fragEl.className = ''; for (const c of CHORUS) { c.t = 99; c.e.className = 'tk'; }
+}
+function visionStep(dt) {
+  const v = VISION;
+  v.t += dt;
+  // memories, far apart, never the same twice in a game
+  if (v.t > v.next) { fragEl.textContent = nextFragment(v.feel); fragEl.className = 'on'; v.shown = v.t; v.next = v.t + rr(9, 13); }
+  if (v.t - v.shown > 7.5) fragEl.className = '';
+  chorusRun(dt, v.V.pts, () => STORY[v.feel].words[rnd() * STORY[v.feel].words.length | 0], v.t > 3, 30);
+  return qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]);
+}
+function renderVision(r) {
+  const V = VISION.V;
+  r.setBindGroup(1, V.bg);
+  r.setPipeline(pVisSky); r.draw(3);
+  r.setPipeline(pVis);
+  V.inst.forEach((it, m) => { if (!it.n) return; r.setVertexBuffer(0, VIS_MESH[m].vb); r.setVertexBuffer(1, it.b); r.setIndexBuffer(VIS_MESH[m].ib, 'uint32'); r.drawIndexed(VIS_MESH[m].n, it.n); });
+  r.setPipeline(pDust); r.setVertexBuffer(0, bDust); r.draw(4, nDust);
+}
+// ---------------------------------------------------------------- the diary (J): memories and voices gathered so far
+let diaryOpen = false;
+const diaryEl = $('dy');
+function diary(open) {
+  diaryOpen = open;
+  if (open) {
+    const sec = (title, lines) => lines && lines.length ? `<h3>${title}</h3>` + lines.slice(-14).map((l) => `<p>${l.replace(/</g, '&lt;')}</p>`).join('') : '';
+    diaryEl.innerHTML = '<h2>Diário</h2>' + FEELINGS.map((f) => sec(STORY[f].name, DIARY[f])).join('') + sec('Vozes', DIARY.almas) + (Object.keys(DIARY).length ? '' : '<p>Ainda não há nada aqui. Procure os pontos de luz e escute as almas.</p>');
+  }
+  diaryEl.className = open ? 'on' : '';
+}
+// ---------------------------------------------------------------- photo (P): hide everything, frame it, save a PNG
+async function photo() {
+  body.classList.add('ph');
+  await new Promise((r) => setTimeout(r, 60));
+  const url = await snap();
+  const a = document.createElement('a'); a.href = url; a.download = `jardim-orbital-${SEED}-${Date.now() % 1e6}.png`; a.click();
+  flash = 0.35;
+  setTimeout(() => body.classList.remove('ph'), 900);
 }
 // ---------------------------------------------------------------- crossing the black hole
 const thoughtEl = $('th');
@@ -671,22 +771,23 @@ function uniforms(cq) {
   UG.set([1 / f, asp, NEAR, 2 / (f * H)], 44);
   UG.set([...r, expo], 48);
   UG.set([...u, LV > 1 ? 0.03 : 0.045], 52);
-  const VIS = END.stage === 'shore' ? [SHORE.p] : PL;
+  const VIS = VISION ? [] : END.stage === 'shore' ? [SHORE.p] : PL;
   UG.set([-b[0], -b[1], -b[2], VIS.length], 56);
   UG.set([...SYS.neb[0], SYS.nebSeed], 60);
   UG.set([...SYS.neb[1], 0.55], 64);
   // sun on screen
   const cx = vp[0] * SUN[0] + vp[4] * SUN[1] + vp[8] * SUN[2], cy = vp[1] * SUN[0] + vp[5] * SUN[1] + vp[9] * SUN[2], cw = vp[3] * SUN[0] + vp[7] * SUN[1] + vp[11] * SUN[2];
   UG.set([(cx / cw * 0.5 + 0.5) * W, (0.5 - cy / cw * 0.5) * H, cw > 0 ? 1 : 0, SYS.nebStyle], 72);
-  VIS.forEach((p, i) => UG.set([...p.c, p.R, ...p.atm, p.R + p.hmax + p.H * 4, p.dens, p.H, p.sea, 0], 76 + i * 12));
+  VIS.forEach((p, i) => UG.set([...p.c, p.R, ...p.atm, p.R + p.hmax + p.H * 4, p.dens, p.H, p.sea, p.ring || 0], 76 + i * 12));
+  UG.set([breath, VISION ? 1 : 0, 0, 0], 296);
   // lights: the lamp, then the nearest spirits
   const L = [];
   if (lamp) { const lf = qrot(cq, [0, 0, -1]); L.push([pos[0] + lf[0] * 0.5, pos[1] + lf[1] * 0.5, pos[2] + lf[2] * 0.5, 1.6, 1, 0.92, 0.8, 30, 0]); }
   // the aura lights the ground you skim over
   if (aura > 0.05) L.push([pos[0] - u[0] * 0.5, pos[1] - u[1] * 0.5, pos[2] - u[2] * 0.5, 2.5 * aura, 0.6, 0.7, 1.3, 26, 0]);
   const shoreNow = END.stage === 'shore';
-  const cand = (shoreNow ? SHORE.lights : lightsStatic).map((l) => [...l, hypot(l[0] - pos[0], l[1] - pos[1], l[2] - pos[2])]);
-  const SA = shoreNow ? SHORE.flA : spiritArr, NS = shoreNow ? SHORE.nfl : nSpirit;
+  const cand = (VISION ? [] : shoreNow ? SHORE.lights : lightsStatic).map((l) => [...l, hypot(l[0] - pos[0], l[1] - pos[1], l[2] - pos[2])]);
+  const SA = shoreNow ? SHORE.flA : spiritArr, NS = VISION ? 0 : shoreNow ? SHORE.nfl : nSpirit;
   for (let i = 0; i < NS; i++) {
     const o = i * 16; if (SA[o + 13] > 1.5) continue;
     orbitAt(SA, o, time, tmp3);
@@ -700,7 +801,7 @@ function uniforms(cq) {
   UG.set([vel[0], vel[1], vel[2], aura], 268);
   UG.set([spd, shake, bhIn, flash], 272);
   UG.set([...BH.c, BH.rs], 276);
-  UG.set([...BH.n, bhIn > 0.5 || END.stage === 'shore' ? 0 : 1], 280);
+  UG.set([...BH.n, bhIn > 0.5 || END.stage === 'shore' || VISION ? 0 : 1], 280);
   UG.set([END.glare, END.corr, END.shore, END.t], 284);
   if (SHORE) {
     // a slow blink every ~25 s
@@ -737,6 +838,7 @@ function render() {
   const r = e.beginRenderPass({ colorAttachments: [ca], depthStencilAttachment: { view: T.depth.createView(), depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'store' } });
   r.setBindGroup(0, bg0);
   if (END.stage === 'shore') { renderShore(r); r.end(); post(e); return; }
+  if (VISION) { renderVision(r); r.end(); post(e); return; }
   r.setBindGroup(1, PD[0].bg); if (!SKIP.includes('sky')) { r.setPipeline(pSky); r.draw(3); }
   PL.forEach((p, i) => {
     const g = PD[i]; r.setBindGroup(1, g.bg);
@@ -806,7 +908,7 @@ const label = $('n');
 const talkEl = $('t'), tmpS = [0, 0, 0];
 let talk = null, lastTalk = -99;
 function talkUpdate(dt) {
-  if (trav || END.stage !== 'play') { if (talk) { talkEl.className = ''; talk = null; } return; }
+  if (trav || VISION || END.stage !== 'play') { if (talk) { talkEl.className = ''; talk = null; } return; }
   const look = qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1]);
   if (!talk && time - lastTalk > 3) {
     let best = null, bd = 1e9;
@@ -818,7 +920,11 @@ function talkUpdate(dt) {
       if (d < bd) { bd = d; best = s; }
     }
     if (best) {
-      const line = soulLine(best.kind, best.said);
+      // souls of a planet often speak of its feeling
+      let line = null;
+      if (best.feel && rnd() < 0.45) { const L = STORY[best.feel].soul.filter((x) => !best.said.has(x)); if (L.length) { line = L[rnd() * L.length | 0]; best.said.add(line); } }
+      if (!line) line = soulLine(best.kind, best.said);
+      diaryAdd('almas', line);
       talk = { s: best, line, t: 0, dur: 3.5 + line.length * 0.07 };
       best.cool = time + 25; lastTalk = time; speakSound('soul');
     }
@@ -838,12 +944,23 @@ function talkUpdate(dt) {
   talkEl.className = cw > 0.1 ? 'on' : '';
   if (talk.t > talk.dur || d > 30) { talkEl.className = ''; talk = null; }
 }
+// the sun turns slowly around the system (a full turn in ~16 min): sunrises and sunsets on every planet
+let breath = 0;
+const SUN0 = SUN.slice(), SUNAX = normalize3(cross3(SUN0, [0.3, 1, 0.2]));
+function turnSun(dt) {
+  if (END.stage !== 'play' || VISION) return;
+  const a = time * TAU / 960, c = cos(a), s = sin(a), k = SUNAX, d = dot3(k, SUN0), x = cross3(k, SUN0);
+  for (let i = 0; i < 3; i++) SUN[i] = SUN0[i] * c + x[i] * s + k[i] * d * (1 - c);
+}
 function frame(now) {
   window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
   const dtr = now - last; last = now;
-  const dt = min(dtr / 1000, 0.05);
+  // breathing (hold B): everything slows down and softens
+  breath += ((kbr && !menu ? 1 : 0) - breath) * (1 - exp(-dtr / 1000 * 2.5));
+  const dt = min(dtr / 1000, 0.05) * (1 - breath * 0.7);
   time += dt;
+  turnSun(dt);
   // resolution follows the frame rate: aim for 60 fps
   if (dtr < 500) { dynT += dtr; dynN++; }
   if (dynT > 1000 && !HEADLESS) {
@@ -865,7 +982,8 @@ function frame(now) {
   flash = max(0, flash - dt * 0.6);
   render();
   // the planet's name when you arrive on it
-  if (!menu && groundT > 0 && near !== lastNear) { const p = PL[near]; lastNear = near; label.textContent = `${p.name} · ${BIOMES[p.biome]} · ${MOOD_NAMES[p.mood]} · ${p.g.toFixed(1)} m/s²`; label.className = 'on'; labelT = 5; }
+  if (!menu && !VISION && groundT > 0 && near !== lastNear) { const p = PL[near]; lastNear = near; label.textContent = `${p.name} · ${STORY[p.feel].name} · ${p.g.toFixed(1)} m/s²`; label.className = 'on'; labelT = 5; }
+  promptEl.className = !menu && !VISION && END.stage === 'play' && !trav && nearBeacon() ? 'on' : '';
   if (labelT > 0 && (labelT -= dt) <= 0) label.className = '';
   if (hud) {
     hN++; hT += dtr; if (dtr > hMax) hMax = dtr;
@@ -914,5 +1032,5 @@ function lookFrom(from, to) {
   const yaw = atan2(dot3(cross3(f, h), up), dot3(f, h));
   B = qnorm(qmul(B, [0, sin(yaw / 2), 0, cos(yaw / 2)])); pitch = Math.asin(clamp(dot3(dir, up), -1, 1)); groundT = 0;
 }
-window.__game = { shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
+window.__game = { vision: (f) => enterVision(f), leave: () => leaveVision(), beacons: () => PL.map((p) => [p.feel, !!p.beacon]), nearBeacon: () => { const p = nearBeacon(); return p && p.feel; }, interact, diaryOpen: (o) => diary(o), get breath() { return breath; }, shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
 requestAnimationFrame(frame);

@@ -15,6 +15,9 @@ Abra o `index.html` no **Chrome** ou no **Edge** de um computador. É preciso te
 | Pular · segurar no ar: planar | `Espaço` |
 | Aura: voar como nave | segure `Shift` + `W` `A` `S` `D` / `Espaço` / `Q` |
 | Cordão de prata | segure o botão direito do mouse, ou `R` |
+| Entrar na luz / voltar | `F` (perto de um quadrado de luz) |
+| Respirar (câmera lenta) | segure `B` |
+| Diário · foto · lanterna | `J` · `P` · `L` |
 | Subir / descer no ar | `E` / `Q` |
 | Órbita de cada planeta | `1` `2` `3` |
 | Lanterna | `F` |
@@ -23,6 +26,8 @@ Abra o `index.html` no **Chrome** ou no **Edge** de um computador. É preciso te
 Cada planeta tem um clima, e o clima decide a música, a luz e a gravidade: **leve** (música clara, gravidade flutuante: um pulo dura uns 10 s), **enigmático** (música estranha, gravidade de Terra) e **sinistro** (música sombria, gravidade pesada). Do enigmático e do sinistro só se sai com a aura. Cada planeta segura o que está na sua esfera de influência; entre eles você deriva, e o "chão" vira suavemente quando você troca de mundo.
 
 **Aura.** Segurando Shift, você pilota como uma nave: segurar a mesma direção aumenta a aceleração, e para frear é preciso empurrar no sentido contrário. Não há freio automático no espaço. Quanto mais rápido, mais turbulência, mais rastros e mais o campo de visão se abre.
+
+**A história.** O viajante não lembra quem foi. Cada planeta é um sentimento da vida dele: **Alegria**, **Desejo**, **Conquista**, **Arrependimento** e **Perda**. O peso do sentimento é a gravidade do planeta. Em cada um há um quadrado de luz; entre nele (`F`) e você vira um ponto parado dentro de uma cena simbólica daquela lembrança, olhando para onde quiser, pelo tempo que quiser, enquanto fragmentos de memória aparecem. O diário (`J`) guarda tudo o que você já viu e ouviu. O compêndio está em `source/src/story.js`: textos originais, escritos a partir de temas humanos recorrentes em discussões do Reddit sobre arrependimentos, alegrias pequenas, conquistas que ninguém viu, sonhos adiados e luto, sem citar nenhuma postagem.
 
 **Almas.** Elas flutuam em órbita ou ficam sentadas perto da água. Algumas são luminosas, a maioria escura e translúcida. Chegue perto e olhe para uma: ela diz alguma coisa. São oito tipos (recém-desencarnados, nunca-nascidos, devotos, sábios, silenciosos, estranhos, melancólicos, antigos), com centenas de falas entre escritas e geradas por combinação (`source/src/souls.js`).
 

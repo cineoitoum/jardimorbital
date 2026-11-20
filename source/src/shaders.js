@@ -104,6 +104,7 @@ struct G {
   fx2: vec4f,   // the end: sun glare 0..1, corridor of light 0..1, at the shore 0..1, corridor time
   eye: vec4f,   // the great eye in the clouds: direction, angular radius of the iris
   eye2: vec4f,  // its up direction, blink 0..1
+  misc2: vec4f, // breathing 0..1, inside a vision 0..1, _, _
 };
 `;
 // sky functions: need W_NOISE and the uniform `g`
@@ -535,6 +536,50 @@ struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n
 }
 `;
 
+// ---------------------------------------------------------------- visions: objects floating around a still point
+// pu.c = origin of the vision; pu.col: 0 sky top, 1 sky bottom, 2 fog, 3 key light
+const W_VIS = S_SCENE + /*wgsl*/`
+struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n: vec3f, @location(2) c: vec3f, @location(3) e: vec2f };
+fn qrot(q: vec4f, v: vec3f) -> vec3f { let t = 2. * cross(q.xyz, v); return v + q.w * t + cross(q.xyz, t); }
+fn spin(v: vec3f, a: f32) -> vec3f { let c = cos(a); let s = sin(a); return vec3f(c * v.x + s * v.z, v.y, -s * v.x + c * v.z); }
+@vertex fn vs(@location(0) p: vec3f, @location(1) n: vec4f, @location(2) a: vec4f, @location(3) b: vec4f, @location(4) q: vec4f, @location(5) c: vec4f) -> VO {
+  let t = g.cam.w;
+  // the whole scene turns very slowly around you; each object bobs on its own
+  let ang = t * .012;
+  var lp = a.xyz + vec3f(0., sin(t * .45 + b.w * 6.283) * c.w, 0.) + qrot(q, p * b.xyz);
+  let w = pu.c.xyz + spin(lp, ang);
+  return VO(g.vp * vec4f(w, 1.), w, spin(qrot(q, n.xyz), ang), c.rgb, vec2f(a.w, b.w));
+}
+@fragment fn fs(v: VO) -> @location(0) vec4f {
+  let N = normalize(v.n); let V = normalize(g.cam.xyz - v.w);
+  let L = normalize(vec3f(.45, .8, .35));
+  let amb = mix(pu.col[1].rgb, pu.col[0].rgb, N.y * .5 + .5) * .45;
+  let rim = pow(1. - abs(dot(N, V)), 3.) * pu.col[2].rgb * .8;
+  let ph = v.e.y;
+  let flick = .85 + .15 * sin(g.cam.w * 13. + ph * 50.) * sin(g.cam.w * 7.3 + ph * 20.);
+  var col = v.c * (pu.col[3].rgb * max(dot(N, L), 0.) * .9 + amb) + rim + v.c * v.e.x * select(1., flick, v.e.x > 3.);
+  let d = length(g.cam.xyz - v.w);
+  col = mix(col, pu.col[2].rgb * .8, 1. - exp(-d * .011));
+  return vec4f(col, 1.);
+}
+`;
+const W_VISSKY = S_SCENE + /*wgsl*/`
+struct VO { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
+@vertex fn vs(@builtin(vertex_index) i: u32) -> VO { let p = vec2f(f32(i32(i & 1u) * 4 - 1), f32(i32(i >> 1u) * 4 - 1)); return VO(vec4f(p, 0., 1.), p); }
+@fragment fn fs(v: VO) -> @location(0) vec4f {
+  let w = g.ivp * vec4f(v.ndc, 1., 1.);
+  let d = normalize(w.xyz / w.w - g.cam.xyz);
+  let t = g.cam.w;
+  var c = mix(pu.col[1].rgb, pu.col[0].rgb, ss(-.5, .7, d.y));
+  // slow veils of mist and a soft glow where the light comes from
+  let f = fbm(d * 2.5 + vec3f(t * .01, 0., t * .007), 4);
+  c = mix(c, pu.col[2].rgb * 1.1, ss(.45, .8, f) * .3);
+  c += pu.col[3].rgb * pow(max(dot(d, normalize(vec3f(.45, .8, .35))), 0.), 6.) * .8;
+  c += stars(d) * ss(.25, 0., dot(pu.col[0].rgb, vec3f(.33))) * .7;
+  return vec4f(c, 1.);
+}
+`;
+
 // ---------------------------------------------------------------- sprites: glints, flower specks, spirit trails, dust (additive)
 const W_SPR = S_SCENE + S_ORBIT + /*wgsl*/`
 struct VO { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) c: vec4f };
@@ -549,12 +594,12 @@ fn quad(vi: u32, P: vec3f, size: f32, col: vec4f) -> VO {
 }
 // static: a = position + size, b = colour + flags (frac part: twinkle seed, >= 1: four-point spikes)
 @vertex fn vsGlint(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f) -> VO {
-  let tw = .55 + .45 * sin(g.cam.w * (1.5 + fract(b.w) * 3.) + fract(b.w) * 40.);
+  let tw = select(.55 + .45 * sin(g.cam.w * (1.5 + fract(b.w) * 3.) + fract(b.w) * 40.), 1., b.w >= 2.);
   var c = b.rgb * tw;
   // only glints on the near side of their planet
   let up = normalize(a.xyz - pu.c.xyz);
   if (dot(up, normalize(g.cam.xyz - a.xyz)) < -.25) { c = vec3f(0.); }
-  return quad(vi, a.xyz, a.w, vec4f(c, step(1., b.w)));
+  return quad(vi, a.xyz, a.w, vec4f(c, select(step(1., b.w), 2., b.w >= 2.)));
 }
 // dust drifting around the camera in a 50 m box
 @vertex fn vsDust(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f) -> VO {
@@ -606,6 +651,11 @@ fn quad(vi: u32, P: vec3f, size: f32, col: vec4f) -> VO {
 @fragment fn fs(v: VO) -> @location(0) vec4f {
   let r2 = dot(v.uv, v.uv);
   var i = exp(-r2 * 7.);
+  if (v.c.a > 1.5) {
+    // a square of light: hard bright face, soft glow around it
+    let a = max(abs(v.uv.x), abs(v.uv.y));
+    return vec4f(v.c.rgb * (ss(1.02, .96, a) * 3. + exp(-max(a - 1., 0.) * 2.2) * .5 * ss(3., 2., a)), 0.);
+  }
   if (v.c.a > .5) {
     // four-point star: a small core with long thin spikes
     let a = abs(v.uv);
@@ -691,6 +741,26 @@ fn disk(ro: vec3f, rd: vec3f) -> vec4f {
     }
   }
   let np = i32(g.fwd.w);
+  for (var i = 0; i < np; i++) {
+    let pd = g.pl[i * 3 + 2]; if (pd.w <= 0.) { continue; }
+    let pc = g.pl[i * 3];
+    let n = normalize(vec3f(.35 * sin(f32(i) * 2.1 + 1.), 1., .35 * cos(f32(i) * 1.3)));
+    let dn = dot(dir, n); if (abs(dn) < 1e-4) { continue; }
+    let tr = dot(pc.xyz - g.cam.xyz, n) / dn;
+    if (tr <= 0. || tr > tEnd) { continue; }
+    // hidden behind the planet itself
+    let oc = g.cam.xyz - pc.xyz; let bq = dot(oc, dir); let cq = dot(oc, oc) - pc.w * pc.w; let dq = bq * bq - cq;
+    if (dq > 0. && -bq - sqrt(dq) > 0. && -bq - sqrt(dq) < tr) { continue; }
+    let r = length(g.cam.xyz + dir * tr - pc.xyz) / pc.w;
+    if (r < 1.55 || r > 2.7) { continue; }
+    let u = (r - 1.55) / 1.15;
+    let band = .5 + .5 * cos(6.283 * (u * .9 + vec3f(0., .33, .67)));
+    let dens = ss(0., .08, u) * ss(1., .9, u) * (.55 + .45 * sin(u * 60.));
+    // stipple: ink dots whose density follows the band
+    let dot2 = step(1. - dens * .85, h31(vec3f(floor(fc.xy), 3.)));
+    let lit = .35 + .65 * ss(-.3, .5, dot(n, g.sun.xyz) * sign(dn) * -1. + .3);
+    c = mix(c, band * 1.6 * lit, dot2 * .9);
+  }
   var T = vec3f(1.); var inS = vec3f(0.);
   for (var i = 0; i < np; i++) {
     let pc = g.pl[i * 3]; let pa = g.pl[i * 3 + 1]; let pd = g.pl[i * 3 + 2];
@@ -849,7 +919,9 @@ fn corridor(q: vec2f, t: f32, asp: f32) -> vec3f {
   if (g.fx2.y > 0.) { c = mix(c, corridor(q, g.fx2.w, g.res.x * g.res.w), g.fx2.y); }
   if (g.fx2.z > 0.) { c = mix(c, hueRot(c, sin(t * .05) * 1.2), g.fx2.z * .3); }
   c *= g.camR.w;
-  c *= 1. - dot(q, q) * .7;
+  let br = g.misc2.x;
+  c = mix(c, vec3f(dot(c, vec3f(.3, .5, .2))), br * .35);
+  c *= 1. - dot(q, q) * (.7 + br * 1.2);
   c = tmap(c);
   let l = dot(c, vec3f(.2126, .7152, .0722));
   // slightly faded blacks, like printed film

@@ -47,12 +47,13 @@ function makeSystem(seed, count = 5) {
   // pick `count` different biomes
   const order = [0, 1, 2, 3, 4];
   for (let i = order.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [order[i], order[j]] = [order[j], order[i]]; }
-  const planets = [], used = new Set();
+  const planets = [];
+  // one feeling per planet (with four planets, Conquista is left out); the feeling sets the mood and the gravity
+  const feels = count >= 5 ? FEELINGS.slice() : FEELINGS.filter((f) => f !== 'conquista');
+  for (let i = feels.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [feels[i], feels[j]] = [feels[j], feels[i]]; }
   for (let i = 0; i < count; i++) {
     const biome = order[i % order.length], pal = PALETTES[biome]();
-    let mood = MOODS[MOOD_OF_BIOME[biome]];
-    if (used.has(mood)) mood = MOODS.find((m) => !used.has(m)) || mood;
-    used.add(mood);
+    const feel = feels[i % feels.length], mood = STORY[feel].mood;
     const dark = mood === 'sinistro';
     if (dark) { for (const k of [0, 1, 2, 3, 4, 8, 9]) pal.col[k] = '#' + hex(pal.col[k]).map((c) => round(c * 255 * 0.62).toString(16).padStart(2, '0')).join(''); pal.dens *= 1.3; }
     const R = rr(62, 92);
@@ -70,7 +71,7 @@ function makeSystem(seed, count = 5) {
     }
     planets.push({
       i, biome, name: nameOf(), c, R, A, hmax: A * (biome === 2 || biome === 4 ? 2.4 : 1.4) + 5,
-      sea: hasSea ? R + seaOff : 0, g: mood === 'leve' ? rr(0.8, 1.2) : mood === 'enigmatico' ? rr(8.8, 10.5) : rr(14, 17), mood, seed: rr(0, 200),
+      sea: hasSea ? R + seaOff : 0, g: mood === 'leve' ? rr(0.8, 1.2) : mood === 'enigmatico' ? rr(8.8, 10.5) : rr(14, 17), mood, feel, ring: feel === 'desejo' ? 1 : 0, seed: rr(0, 200),
       col: pal.col.map((h) => jit(lin(h), 0.12)), atm: jit(lin(pal.atm), 0.1), dens: pal.dens * rr(0.8, 1.25), H: pal.H * rr(0.85, 1.2), emis: pal.emis,
     });
   }

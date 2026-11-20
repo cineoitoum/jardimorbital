@@ -167,7 +167,7 @@ function mkSound(ac) {
       if (w > 0.01 && s.w <= 0.01) s.song.reset(now);
       s.w = w; wmax = max(wmax, w);
       s.bus.gain.setTargetAtTime(w * 0.9, t, 1.2);
-      s.lp.frequency.setTargetAtTime(mix(18000, 350, max(bhNear, bhIn)), t, 0.5);
+      s.lp.frequency.setTargetAtTime(mix(18000, 350, max(bhNear, bhIn, breath * 0.85)), t, 0.5);
       if (w > 0.01) s.song.tick(now, now + 0.5);
     }
     space.gain.setTargetAtTime((1 - wmax) * (1 - bhIn) * (1 - endF), t, 1.5);
