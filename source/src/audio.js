@@ -139,6 +139,13 @@ function mkSound(ac) {
   });
   // a soul speaking: a soft glide; a thought inside the black hole: a low bell
   SPEAK = (kind) => {
+    if (kind === 'expel') {
+      // a deep, slow refusal
+      const t = ac.currentTime + 0.02, p = G(1, out, G(2, wet));
+      voice(p, 'sine', 55, t, 0.15, 2.2, 0.5, { glide: 0.6 }); voice(p, 'sine', 82.4, t + 0.05, 0.2, 2, 0.25, { glide: 0.7 });
+      voice(p, 'sawtooth', 41.2, t, 0.4, 1.8, 0.12, { lp: 180, glide: 0.8 });
+      return;
+    }
     const t = ac.currentTime + 0.02, f = kind === 'thought' ? rr(220, 330) : rr(330, 660);
     const p = N(StereoPannerNode, { pan: rr(-0.4, 0.4) }, out, G(1.5, wet));
     voice(p, 'sine', f, t, 0.3, 0.9, 0.05, { glide: rr(0.8, 1.25) });

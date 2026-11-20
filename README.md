@@ -15,11 +15,10 @@ Abra o `index.html` no **Chrome** ou no **Edge** de um computador. É preciso te
 | Pular · segurar no ar: planar | `Espaço` |
 | Aura: voar para onde o mouse aponta | segure `Shift`; `W` acelera, `S` freia; ao soltar, você desliza até parar |
 | No ar, mirando um planeta | segure `W`: você segue até ele e pousa |
-| Cordão de prata | `R` ou botão direito: te puxa até a luz mais próxima ainda não vista |
+| Cordão de prata | `R` ou botão direito: te puxa até a luz mais próxima ainda não vista, contornando os planetas; depois de todas, até o sol |
 | Entrar na luz / voltar | `F` (perto de um quadrado de luz) |
 | Respirar (câmera lenta) | segure `B` |
-| Diário · foto · lanterna | `J` · `P` · `L` |
-| Subir / descer no ar | `E` / `Q` |
+| Diário · foto | `J` · `P` |
 | Órbita de cada planeta | `1` `2` `3` |
 | Lanterna | `F` |
 | Menu · som · cola de comandos e dados | `Esc` · `M` · `H` |
@@ -36,7 +35,7 @@ Cada planeta tem um clima, e o clima decide a música, a luz e a gravidade: **le
 
 Cada sistema tem 5 planetas (4 no nível Baixo).
 
-**O sol.** Há um jeito de terminar a viagem. Ele tem a ver com o sol, e só se abre para quem já atravessou o buraco negro.
+**O sol.** Há um jeito de terminar a viagem, e ele tem a ver com o sol. Mas é preciso lembrar antes de esquecer: quem chega cedo demais é mandado de volta.
 
 `?seed=123` na URL fixa o sistema. O botão **Novo sistema** sorteia outro.
 
