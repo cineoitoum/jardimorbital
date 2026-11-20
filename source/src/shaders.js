@@ -94,13 +94,14 @@ struct G {
   sunS: vec4f,  // sun on screen: px x, px y, in front, nebula style
   pl: array<vec4f, 12>,  // per planet: centre+R | atmosphere colour+top | density, scale height, sea radius, _
   li: array<vec4f, 24>,  // per light: position+intensity | colour+radius
+  vel: vec4f,   // player velocity, aura 0..1
+  fx: vec4f,    // speed, shake, inside the black hole 0..1, white flash
+  bh: vec4f,    // black hole centre, visual radius
+  bh2: vec4f,   // accretion disk normal, visible
 };
 `;
-const S_SCENE = S_G + W_NOISE + /*wgsl*/`
-struct PU { c: vec4f, p: vec4f, col: array<vec4f, 12> };
-@group(0) @binding(0) var<uniform> g: G;
-@group(1) @binding(0) var<uniform> pu: PU;
-// col: 0 rockA 1 rockB 2 ground 3 ground2 4 low/sand 5 emissive 6 water 7 deep water 8 blade base 9 blade tip 10 crystal 11 crystal glow
+// sky functions: need W_NOISE and the uniform `g`
+const S_SKYFN = /*wgsl*/`
 fn nebula(d: vec3f) -> vec3f {
   let p = d * 2.1 + g.nebA.w;
   let w = vec3f(fbm(p, 3), fbm(p + 5.2, 3), fbm(p + 9.7, 3));
@@ -143,6 +144,13 @@ fn sky(d: vec3f) -> vec3f {
   c += vec3f(1., .92, .82) * (ss(.99985, .99993, sd) * 80. + pow(sd, 900.) * 6. + pow(sd, 60.) * .12) * g.sun.w;
   return c;
 }
+`;
+const S_SCENE = S_G + W_NOISE + /*wgsl*/`
+struct PU { c: vec4f, p: vec4f, col: array<vec4f, 12> };
+@group(0) @binding(0) var<uniform> g: G;
+@group(1) @binding(0) var<uniform> pu: PU;
+// col: 0 rockA 1 rockB 2 ground 3 ground2 4 low/sand 5 emissive 6 water 7 deep water 8 blade base 9 blade tip 10 crystal 11 crystal glow
+` + S_SKYFN + /*wgsl*/`
 // spirits and the lamp light the ground nearby
 fn lights(p: vec3f, n: vec3f) -> vec3f {
   var c = vec3f(0.);
@@ -364,23 +372,36 @@ fn spiritCol(e: vec4f) -> vec3f {
 }
 `;
 const W_SPIRIT = S_SCENE + S_ORBIT + /*wgsl*/`
-struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n: vec3f, @location(2) e: vec4f, @location(3) part: f32 };
+struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n: vec3f, @location(2) e: vec4f, @location(3) part: f32, @location(4) ph: f32 };
+// e.w: < .6 a dark translucent soul with a glowing rim (the brightness of the rim), >= .6 a luminous one
 @vertex fn vs(@location(0) p: vec3f, @location(1) n: vec4f, @location(2) a: vec4f, @location(3) b: vec4f, @location(4) d: vec4f, @location(5) e: vec4f) -> VO {
   let t = g.cam.w;
   var P: vec3f; var X: vec3f; var Y: vec3f; var Z: vec3f;
   var lp = p;
+  let ph = d.w * 7.;
+  // breathing, and the head turning slowly
+  lp *= 1. + sin(t * .9 + ph) * .025;
+  lp.x += select(0., sin(t * .45 + ph) * .05, n.w < .05);
   if (e.y > .5 && e.y < 1.5) {
-    // seated on the ground: a = position, b = up, d = facing
+    // seated on the ground: a = position, b = up, d = facing; rocks gently back and forth
     Y = b.xyz; Z = normalize(d.xyz - Y * dot(d.xyz, Y)); X = cross(Y, Z);
-    P = a.xyz + Y * sin(t * .5 + d.w * 6.) * .03;
+    lp.z += lp.y * sin(t * .6 + ph) * .07;
+    lp.y += select(0., sin(t * 1.1 + ph + p.x * 4.) * .03, n.w > .3 && n.w < .7);
+    P = a.xyz + Y * sin(t * .5 + ph) * .03;
   } else {
     let th = d.w + b.w * t;
     P = orbitPos(a, b, d, th);
     let fw = normalize(-b.xyz * sin(th) + d.xyz * cos(th)) * sign(b.w);
     let rad = normalize(P - a.xyz);
-    X = normalize(cross(rad, fw));
-    Y = normalize(fw * .85 + rad * .5);
+    let X0 = normalize(cross(rad, fw));
+    let Y0 = normalize(fw * .85 + rad * .5);
+    // a slow roll around the direction of flight
+    let rl = sin(t * .23 + ph) * .45;
+    X = X0 * cos(rl) + cross(Y0, X0) * sin(rl);
+    Y = Y0;
     Z = cross(X, Y);
+    // arms open and close like slow swimming
+    lp.y += select(0., sin(t * .7 + ph) * .12 * abs(p.x), n.w > .3 && n.w < .7);
     // arms drift, legs trail and ripple
     let part = n.w;
     lp.x += select(0., sin(t * .8 + d.w * 5. + p.y * 2.) * .08 * sign(p.x), part > .3 && part < .7);
@@ -388,11 +409,12 @@ struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n
   }
   let w = P + (X * lp.x + Y * lp.y + Z * lp.z) * e.x;
   let nw = normalize(X * n.x + Y * n.y + Z * n.z);
-  return VO(g.vp * vec4f(w, 1.), w, nw, e, n.w);
+  return VO(g.vp * vec4f(w, 1.), w, nw, e, n.w, ph);
 }
 @fragment fn fs(v: VO) -> @location(0) vec4f {
   let V = normalize(g.cam.xyz - v.w);
   let Nf = normalize(cross(dpdx(v.w), dpdy(v.w)));
+  if (v.e.w < .6 && v.e.y < 1.5) { discard; }
   if (v.e.y > 1.5) {
     // crystal astronaut: faceted mirror that throws back the nebula, with spectral glints
     let N = select(-Nf, Nf, dot(Nf, V) > 0.);
@@ -411,6 +433,22 @@ struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n
   // fade out when the camera is inside or right next to a big figure
   let near = ss(.4, 2.2, length(g.cam.xyz - v.w) / v.e.x);
   return vec4f(mix(c, vec3f(1.), .45 - fr * .3) * core * head * near, 1.);
+}
+// dark translucent souls: almost black inside, a soft coloured rim, slow sparks moving through
+@fragment fn fsT(v: VO) -> @location(0) vec4f {
+  if (v.e.w >= .6 || v.e.y > 1.5) { discard; }
+  let V = normalize(g.cam.xyz - v.w);
+  let N = normalize(v.n);
+  let fr = 1. - abs(dot(N, V));
+  let rim = pow(fr, 2.2);
+  let c = spiritCol(v.e);
+  let t = g.cam.w;
+  let sp = pow(vn(v.w * 3.5 / v.e.x + vec3f(0., t * .4, t * .2)), 10.) * 6.;
+  let flick = .85 + .15 * sin(t * 1.7 + v.ph * 3.);
+  let near = ss(.3, 1.6, length(g.cam.xyz - v.w) / v.e.x);
+  let head = select(1., 1.5, v.part < .05);
+  let col = c * (rim * 2.4 * v.e.w * 2. * head + sp * v.e.w) + vec3f(.006, .004, .012);
+  return vec4f(col * flick, sat(.18 + .7 * rim) * near * flick);
 }
 `;
 
@@ -441,7 +479,27 @@ fn quad(vi: u32, P: vec3f, size: f32, col: vec4f) -> VO {
   let o = a.xyz * B + vec3f(sin(g.cam.w * .05 + a.w * 9.), cos(g.cam.w * .04 + a.w * 7.), sin(g.cam.w * .03 + a.w * 5.)) * 3.;
   let P = g.cam.xyz + (fract((o - g.cam.xyz) / B) - .5) * B;
   let fade = ss(25., 8., length(P - g.cam.xyz));
-  return quad(vi, P, .03, vec4f(b.rgb * fade * (.5 + .5 * sin(g.cam.w * 2. + a.w * 30.)), 0.));
+  var col = b.rgb * fade * (.5 + .5 * sin(g.cam.w * 2. + a.w * 30.));
+  let sp = length(g.vel.xyz);
+  let st = ss(5., 50., sp);
+  if (st < .01) { return quad(vi, P, .03, vec4f(col, 0.)); }
+  // at speed the dust streaks past: a thin line along the velocity
+  let q = vec2f(f32(vi & 1u), f32(vi >> 1u)) * 2. - 1.;
+  let vd = g.vel.xyz / sp;
+  let sd = normalize(cross(vd, P - g.cam.xyz));
+  let len = .05 + sp * .045 * st;
+  let wid = max(.012, length(P - g.cam.xyz) * g.prj.w * .8);
+  let w = P + vd * q.x * len + sd * q.y * wid;
+  col = (col + vec3f(.5, .6, 1.) * .5 * st) * (1. + st * (1.5 + g.vel.w * 2.));
+  return VO(g.vp * vec4f(w, 1.), vec2f(0., q.y), vec4f(col, 0.));
+}
+// the silver cord: points along the curve, positions written every frame
+@vertex fn vsCord(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f) -> VO {
+  // never thinner than ~2 pixels and never dimmed: a continuous shining thread
+  let q = vec2f(f32(vi & 1u), f32(vi >> 1u)) * 2. - 1.;
+  let sz = max(a.w, length(a.xyz - g.cam.xyz) * g.prj.w * 1.3) * select(1., 3., b.w >= 1.);
+  let w = a.xyz + (g.camR.xyz * q.x + g.camU.xyz * q.y) * sz;
+  return VO(g.vp * vec4f(w, 1.), q * select(1., 3., b.w >= 1.), vec4f(b.rgb * (.8 + .4 * sin(g.cam.w * 6. + b.w * 40.)), step(1., b.w)));
 }
 // spirit trails: a, b, d, e = the spirit's orbit, k = place along the trail + random numbers
 @vertex fn vsTrail(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f, @location(2) d: vec4f, @location(3) e: vec4f, @location(4) k: vec4f) -> VO {
@@ -457,7 +515,7 @@ fn quad(vi: u32, P: vec3f, size: f32, col: vec4f) -> VO {
   let P = P0 - fw * .6 * e.x + (rnd * 2.) * spread + wob;
   var c = mix(vec3f(.85, .9, 1.), spiritCol(e), .5);
   if (k.y > .9) { c = vec3f(1., .45, .2); } else if (k.y > .8) { c = vec3f(.3, .8, 1.); } else if (k.y > .76) { c = vec3f(1., .25, .3); }
-  let br = pow(1. - k.x, 1.4) * (1.2 + 2. * step(.95, k.z)) * e.w;
+  let br = pow(1. - k.x, 1.4) * (1.2 + 2. * step(.95, k.z)) * e.w * select(1., .45, e.w < .6);
   var col = c * br;
   if (e.y > .5 && e.y < 1.5) { col = vec3f(0.); }
   return quad(vi, P, (.025 + .05 * k.w) * e.x, vec4f(col, step(.985, k.z)));
@@ -475,11 +533,34 @@ fn quad(vi: u32, P: vec3f, size: f32, col: vec4f) -> VO {
 `;
 
 // ---------------------------------------------------------------- atmosphere + haze, applied over the resolved scene
-const W_ATM = S_G + W_FS + /*wgsl*/`
+const W_ATM = S_G + W_NOISE + W_FS + /*wgsl*/`
 @group(0) @binding(0) var<uniform> g: G;
 @group(0) @binding(1) var tS: texture_2d<f32>;
 @group(0) @binding(2) var tD: texture_depth${AA > 1 ? '_multisampled' : ''}_2d;
-fn ss(a: f32, b: f32, x: f32) -> f32 { let t = clamp((x - a) / (b - a), 0., 1.); return t * t * (3. - 2. * t); }
+` + S_SKYFN + /*wgsl*/`
+// the accretion disk where a ray crosses its plane: colour + coverage
+fn disk(ro: vec3f, rd: vec3f) -> vec4f {
+  let n = g.bh2.xyz; let rs = g.bh.w;
+  let dn = dot(rd, n);
+  if (abs(dn) < 1e-4) { return vec4f(0.); }
+  let t = dot(g.bh.xyz - ro, n) / dn;
+  if (t <= 0.) { return vec4f(0.); }
+  let p = ro + rd * t - g.bh.xyz;
+  let r = length(p) / rs;
+  if (r < 2.6 || r > 13.) { return vec4f(0.); }
+  let u = normalize(cross(n, vec3f(.3, .1, .9))); let v = cross(n, u);
+  let ang = atan2(dot(p, v), dot(p, u));
+  // gas streams around faster near the middle
+  let sw = ang * 2. + log(r) * 5. - g.cam.w * 3. / r;
+  let gas = fbm(vec3f(cos(sw) * 2., sin(sw) * 2., r * .7), 4);
+  let band = ss(2.6, 3.4, r) * ss(13., 6., r);
+  let hot = ss(8., 3., r);
+  // the side turning towards us is brighter
+  let tang = normalize(cross(n, p));
+  let dop = 1. + .75 * dot(tang, -rd);
+  let col = mix(vec3f(1.4, .5, .18), vec3f(2.2, 1.6, 1.1), hot * .8) * dop * (.3 + gas * 1.2);
+  return vec4f(col * 1.2, sat(band * (.25 + gas * .9)));
+}
 @fragment fn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let px = vec2i(fc.xy);
   var c = textureLoad(tS, px, 0).rgb;
@@ -489,6 +570,43 @@ fn ss(a: f32, b: f32, x: f32) -> f32 { let t = clamp((x - a) / (b - a), 0., 1.);
   let z = textureLoad(tD, px, 0);
   var tEnd = 1e9;
   if (z > 0.) { tEnd = (g.prj.z / z) / max(dot(dir, g.fwd.xyz), 1e-3); }
+  // black hole: bends the light behind it, swallows what is inside its shadow, wears a burning disk
+  if (g.bh2.w > .5) {
+    let oc = g.bh.xyz - g.cam.xyz; let tb = dot(oc, dir); let rs = g.bh.w;
+    if (tb > 0. && tEnd > tb - rs * 13.) {
+      let perp = oc - dir * tb; let b = length(perp);
+      let behind = tEnd > tb;
+      if (behind) {
+        if (b < rs * 2.6) {
+          c = vec3f(0.);
+        } else {
+          let al = min(2. * rs / b * 2.2, 1.2);
+          let d2 = normalize(dir + normalize(perp) * al);
+          // what lies behind, seen along the bent ray: the screen if it lands on it, the sky otherwise
+          let cp = g.vp * vec4f(g.cam.xyz + d2 * 2000., 1.);
+          let uv = vec2f(cp.x / cp.w * .5 + .5, .5 - cp.y / cp.w * .5);
+          var bent = sky(d2);
+          if (cp.w > 0. && all(uv > vec2f(0.)) && all(uv < vec2f(1.))) {
+            let q = vec2i(uv * g.res.xy);
+            if (textureLoad(tD, q, 0) > 0.) { bent = textureLoad(tS, q, 0).rgb; }
+          }
+          c = mix(c, bent, ss(rs * 30., rs * 6., b));
+          // photon ring
+          let pr = (b - rs * 2.75) / (rs * .14);
+          c += vec3f(1.6, 1.25, .9) * exp(-pr * pr) * 2.2;
+          // the far side of the disk, bent up and around the shadow: a thin burning halo
+          let pu = normalize(perp);
+          let ang = atan2(dot(pu, normalize(cross(g.bh2.xyz, dir))), dot(pu, g.bh2.xyz));
+          let hb = (b - rs * 3.25) / (rs * (.3 + .15 * sin(ang * 3. + g.cam.w * .7)));
+          let hn = .55 + .45 * fbm(vec3f(cos(ang) * 3., sin(ang) * 3., g.cam.w * .15), 3);
+          c += vec3f(1.6, .75, .3) * exp(-hb * hb) * hn * 1.4;
+        }
+      }
+      let df = disk(g.cam.xyz, dir);
+      let tDisk = dot(g.bh.xyz - g.cam.xyz, g.bh2.xyz) / dot(dir, g.bh2.xyz);
+      if (tDisk < tEnd && (tDisk < tb || b > rs * 2.6)) { c = mix(c, df.rgb, df.a); }
+    }
+  }
   let np = i32(g.fwd.w);
   var T = vec3f(1.); var inS = vec3f(0.);
   for (var i = 0; i < np; i++) {
@@ -499,7 +617,6 @@ fn ss(a: f32, b: f32, x: f32) -> f32 { let t = clamp((x - a) / (b - a), 0., 1.);
     if (disc <= 0.) { continue; }
     let sq = sqrt(disc);
     let t0 = max(-b - sq, 0.); var t1 = min(-b + sq, tEnd);
-    // the solid planet stops the ray even where no terrain was drawn (behind the horizon)
     let cg = dot(oc, oc) - pc.w * pc.w * .97;
     let dg = b * b - cg;
     if (dg > 0.) { let tg = -b - sqrt(dg); if (tg > 0.) { t1 = min(t1, tg); } }
@@ -560,15 +677,33 @@ fn sat3(x: vec3f) -> vec3f { return clamp(x, vec3f(0.), vec3f(1.)); }
 fn tmap(x: vec3f) -> vec3f { return sat3((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14)); }
 fn hh(p: vec2f) -> f32 { var q = fract(vec3f(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 @fragment fn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {
-  let uv = fc.xy * g.res.zw;
+  var uv = fc.xy * g.res.zw;
+  let t = g.cam.w;
+  // inside the black hole: the picture folds like a mirror under rippling water
+  let ins = g.fx.z;
+  if (ins > 0.) {
+    let asp = g.res.x * g.res.w;
+    var d = uv - .5; d.x *= asp;
+    let r = length(d); var a = atan2(d.y, d.x);
+    a += ins * (.5 / (r + .2) + t * .12);
+    let seg = 6.2831 / 6.; let am = a - seg * floor(a / seg);
+    a = min(am, seg - am) + floor(t * .05) * .7;
+    let rr = r * (1. + ins * .3 * sin(t * .3)) + (sin(r * 26. - t * 2.1) * .014 + sin(a * 5. + t * .7) * .01) * ins;
+    // the raw swirl and its mirrored copy are each continuous; blending the pictures (not the angles) keeps it seamless
+    let a0 = atan2(d.y, d.x) + ins * (.5 / (r + .2) + t * .12);
+    var d0 = vec2f(cos(a0), sin(a0)) * rr; d0.x /= asp;
+    d = vec2f(cos(a), sin(a)) * rr; d.x /= asp;
+    let m0 = fract((d0 + .5) * .5) * 2.; let m1 = fract((d + .5) * .5) * 2.;
+    uv = mix(uv, mix(1. - abs(1. - m0), 1. - abs(1. - m1), ins * .55), ins);
+  }
   let q = uv - .5;
-  // a touch of chromatic aberration towards the edges
-  let ca = q * dot(q, q) * .012;
+  // chromatic aberration towards the edges, stronger at speed and inside the black hole
+  let ca = q * dot(q, q) * (.012 + g.vel.w * .025 + g.fx.y * .3 + ins * .05);
   var c = vec3f(textureSampleLevel(tS, sC, uv + ca, 0.).r, textureSampleLevel(tS, sC, uv, 0.).g, textureSampleLevel(tS, sC, uv - ca, 0.).b);
   let bl = textureSampleLevel(tB, sC, uv, 0.).rgb;
   c = mix(c, bl, .1) + bl * .06;
   // diffraction cross on the sun when it is in view and not hidden
-  if (g.sunS.z > .5) {
+  if (g.sunS.z > .5 && g.fx.z < .5) {
     let sp = vec2i(clamp(g.sunS.xy, vec2f(0.), g.res.xy - 1.));
     var vis = 0.;
     for (var k = 0; k < 5; k++) {
@@ -582,6 +717,22 @@ fn hh(p: vec2f) -> f32 { var q = fract(vec3f(p.xyx) * .1031); q += dot(q, q.yzx 
     let sc = mix(vec3f(.7, .82, 1.3), vec3f(1.3, .55, .35), ss(.0, .3, d));
     c += sc * (hor + ver) * vis * g.sun.w * 1.6 + vec3f(1., .85, .7) * exp(-d * 18.) * vis * g.sun.w * .5;
   }
+  // aura: a glow that gathers around the edges of the view
+  let au = g.vel.w;
+  if (au > 0.) {
+    let e = ss(.18, .72, length(q * vec2f(1., .8)));
+    let ac = mix(vec3f(.55, .75, 1.3), vec3f(.95, .6, 1.4), .5 + .5 * sin(t * .8 + atan2(q.y, q.x) * 2.));
+    c += ac * au * (e * (.38 + .12 * sin(t * 3. + length(q) * 20.)) + .03);
+  }
+  if (ins > 0.) {
+    // colours drift through the spectrum inside
+    let h = t * .1;
+    let rot = mat3x3f(.299 + .701 * cos(h) + .168 * sin(h), .587 - .587 * cos(h) + .330 * sin(h), .114 - .114 * cos(h) - .497 * sin(h),
+                      .299 - .299 * cos(h) - .328 * sin(h), .587 + .413 * cos(h) + .035 * sin(h), .114 - .114 * cos(h) + .292 * sin(h),
+                      .299 - .3 * cos(h) + 1.25 * sin(h), .587 - .588 * cos(h) - 1.05 * sin(h), .114 + .886 * cos(h) - .203 * sin(h));
+    c = mix(c, max(rot * c, vec3f(0.)), ins * .7);
+  }
+  c += vec3f(1., .97, .92) * g.fx.w * 6.;
   c *= g.camR.w;
   c *= 1. - dot(q, q) * .7;
   c = tmap(c);

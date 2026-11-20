@@ -11,15 +11,22 @@ Abra o `index.html` no **Chrome** ou no **Edge** de um computador. É preciso te
 | | |
 |---|---|
 | Olhar | Mouse |
-| Andar | `W` `A` `S` `D` |
-| Pular / jetpack | `Espaço` (segure no ar) |
-| Correr / impulso no ar | `Shift` |
+| Andar, flutuando devagar | `W` `A` `S` `D` |
+| Pular · segurar no ar: planar | `Espaço` |
+| Aura: voar como nave | segure `Shift` + `W` `A` `S` `D` / `Espaço` / `Q` |
+| Cordão de prata | segure o botão direito do mouse, ou `R` |
 | Subir / descer no ar | `E` / `Q` |
 | Órbita de cada planeta | `1` `2` `3` |
 | Lanterna | `F` |
 | Menu · som · dados | `Esc` · `M` · `H` |
 
-A gravidade é a soma da atração de todos os planetas. Por isso o "chão" vira suavemente quando você atravessa de um planeta para outro. Um pulo sobe uns 6 m e dura uns 5 s; com o jetpack dá para sair da órbita e cair no vizinho.
+Cada planeta tem um clima, e o clima decide a música, a luz e a gravidade: **leve** (música clara, gravidade flutuante: um pulo dura uns 10 s), **enigmático** (música estranha, gravidade de Terra) e **sinistro** (música sombria, gravidade pesada). Do enigmático e do sinistro só se sai com a aura. Cada planeta segura o que está na sua esfera de influência; entre eles você deriva, e o "chão" vira suavemente quando você troca de mundo.
+
+**Aura.** Segurando Shift, você pilota como uma nave: segurar a mesma direção aumenta a aceleração, e para frear é preciso empurrar no sentido contrário. Não há freio automático no espaço. Quanto mais rápido, mais turbulência, mais rastros e mais o campo de visão se abre.
+
+**Almas.** Elas flutuam em órbita ou ficam sentadas perto da água. Algumas são luminosas, a maioria escura e translúcida. Chegue perto e olhe para uma: ela diz alguma coisa. São oito tipos (recém-desencarnados, nunca-nascidos, devotos, sábios, silenciosos, estranhos, melancólicos, antigos), com centenas de falas entre escritas e geradas por combinação (`source/src/souls.js`).
+
+**Buraco negro.** Fica além dos planetas, com lente gravitacional, anel de fótons e disco de acreção. De longe a aura ainda vence a atração; abaixo de ~22 m ele te engole. A travessia dura de 2 a 3 minutos, com a realidade dobrada como um espelho d'água e pensamentos espaçados, e você sai do outro lado do sistema.
 
 `?seed=123` na URL fixa o sistema. O botão **Novo sistema** sorteia outro.
 

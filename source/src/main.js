@@ -66,7 +66,7 @@ const meshBuf = (m) => ({ vb: buf(new Uint8Array(m.vb), BU.VERTEX), ib: buf(m.ib
 const mFig = meshBuf(FIG), mSeat = meshBuf(SEAT), mCol = meshBuf(COLM), mRock = meshBuf(ROCK), mOcean = meshBuf(OCEAN);
 
 // ---------------------------------------------------------------- uniforms
-const NG = 220, UG = new Float32Array(NG), uboG = device.createBuffer({ size: NG * 4, usage: BU.UNIFORM | BU.COPY_DST });
+const NG = 236, UG = new Float32Array(NG), uboG = device.createBuffer({ size: NG * 4, usage: BU.UNIFORM | BU.COPY_DST });
 const bgl0 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.VERTEX | SS.FRAGMENT, buffer: {} }] });
 const bgl1 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.VERTEX | SS.FRAGMENT, buffer: {} }] });
 const plScene = device.createPipelineLayout({ bindGroupLayouts: [bgl0, bgl1] });
@@ -75,6 +75,7 @@ const bg0 = device.createBindGroup({ layout: bgl0, entries: [{ binding: 0, resou
 // ---------------------------------------------------------------- build every planet
 const PD = []; // per planet GPU data
 const spirits = []; // orbiting spirits, 16 floats each
+const souls = []; // who can speak: { pos(out), kind, said, cool, scale }
 const lightsStatic = []; // seated spirits: [x, y, z, intensity, r, g, b, radius]
 const blade36 = (a) => {
   const n = a.length / 12, out = new ArrayBuffer(n * 36), f = new Float32Array(out), u8 = new Uint8Array(out);
@@ -110,15 +111,24 @@ for (const p of PL) {
   // seated spirits light the ground around them
   const st = [];
   for (const s of w.seated) {
-    st.push(...s.p, 0, ...s.u, 0, ...s.f, s.ph, 1, 1, s.hue, 2.2);
+    // seated souls: half luminous, half dark with a glowing rim
+    const lum = rnd() < 0.5, glow = lum ? 2.2 : rr(0.35, 0.55);
+    st.push(...s.p, 0, ...s.u, 0, ...s.f, s.ph, 1, 1, s.hue, glow);
     const col = [mix(1, 0.75, s.hue), mix(0.82, 0.88, s.hue), mix(0.5, 1, s.hue)];
-    lightsStatic.push([s.p[0] + s.u[0] * 0.8, s.p[1] + s.u[1] * 0.8, s.p[2] + s.u[2] * 0.8, 2.6, ...col, 16]);
+    lightsStatic.push([s.p[0] + s.u[0] * 0.8, s.p[1] + s.u[1] * 0.8, s.p[2] + s.u[2] * 0.8, lum ? 2.6 : 0.9, ...col, 16]);
+    const at = [s.p[0] + s.u[0] * 1.1, s.p[1] + s.u[1] * 1.1, s.p[2] + s.u[2] * 1.1];
+    souls.push({ pos: (o) => { o[0] = at[0]; o[1] = at[1]; o[2] = at[2]; return o; }, kind: soulKind(), said: new Set(), cool: 0, scale: 1 });
   }
   g.st = buf(new Float32Array(st), BU.VERTEX); g.sn = st.length / 16;
   PD.push(g);
   // floating spirits around this planet
   rseed(500 + p.i * 7 + (p.seed * 10 | 0));
-  for (let k = 0; k < 2; k++) spirits.push(orbitSpirit(p.c, p.R + p.A + rr(7, 24), rr(2.5, 4), rr(1, 2.2), 0, rnd(), rr(0.8, 1.3)));
+  // floating souls: three drifting low and slow (you can catch up and listen), two higher and faster.
+  // Most are dark and translucent with a glowing rim (glow < .6), some luminous
+  for (let k = 0; k < 5; k++) {
+    const low = k < 3, glow = rnd() < 0.7 ? rr(0.3, 0.55) : rr(0.9, 1.3);
+    spirits.push(orbitSpirit(p.c, p.R + p.A * 0.6 + (low ? rr(3, 9) : rr(14, 26)), low ? rr(0.7, 1.4) : rr(2, 3.5), low ? rr(1, 1.6) : rr(1.3, 2.4), 0, rnd(), glow));
+  }
   p.seatedPos = w.seated;
   await new Promise((r) => setTimeout(r));
 }
@@ -127,10 +137,12 @@ for (const p of PL) {
   rseed(SEED + 99);
   const ctr = [0, 1, 2].map((k) => PL.reduce((s, p) => s + p.c[k], 0) / PL.length);
   const rad = PL.reduce((s, p) => s + hypot(p.c[0] - ctr[0], p.c[1] - ctr[1], p.c[2] - ctr[2]), 0) / PL.length;
-  for (let k = 0; k < 2; k++) spirits.push(orbitSpirit(ctr, max(rad, 60) + rr(-15, 25), rr(3, 5), rr(3, 6), 0, rnd(), 1.2));
+  for (let k = 0; k < 3; k++) spirits.push(orbitSpirit(ctr, max(rad, 60) + rr(-15, 25), rr(2, 4), rr(3, 6), 0, rnd(), k ? rr(0.35, 0.55) : 1.2));
   const h = PL[0];
   spirits.push(orbitSpirit(h.c, h.R + h.hmax + 45, 2, 2.2, 2, 0, 1));
 }
+// every orbiting soul can speak too (the crystal astronaut is one of the old ones)
+spirits.forEach((sp, i) => souls.push({ pos: (o) => orbitAt(spiritArr, i * 16, time, o), kind: sp[13] > 1.5 ? 7 : soulKind(), said: new Set(), cool: 0, scale: sp[12] }));
 const spiritArr = new Float32Array(spirits.flat());
 const bSpirit = buf(spiritArr, BU.VERTEX), nSpirit = spirits.length;
 // trails: 160 sparks per spirit (none for the astronaut)
@@ -164,6 +176,8 @@ const pOcean = scenePipe(mOce, 'vs', 'fs', [vbSolid], { blend: ALPHA, dw: true }
 const pBlade = scenePipe(mBlade, 'vs', 'fs', [ibBlade], { strip: true, constants: { ROWS: 4, FAR: LV > 1 ? 70 : 110 } });
 const pProp = scenePipe(mProp, 'vs', 'fs', [vbSolid, inst(48, 3, 2)]);
 const pSpirit = scenePipe(mSpir, 'vs', 'fs', [vbSolid, inst(64, 4, 2)]);
+const pSpiritT = scenePipe(mSpir, 'vs', 'fsT', [vbSolid, inst(64, 4, 2)], { blend: ALPHA, cull: 'back' });
+const pCord = scenePipe(mSpr, 'vsCord', 'fs', [inst(32, 2)], { strip: true, blend: ADD });
 const pGlint = scenePipe(mSpr, 'vsGlint', 'fs', [inst(32, 2)], { strip: true, blend: ADD });
 const pDust = scenePipe(mSpr, 'vsDust', 'fs', [inst(32, 2)], { strip: true, blend: ADD });
 const pTrail = scenePipe(mSpr, 'vsTrail', 'fs', [inst(80, 5)], { strip: true, blend: ADD });
@@ -302,6 +316,7 @@ const key = (e, v) => {
   switch (e.code) {
     case 'KeyW': kf = v; break; case 'KeyS': kb = v; break; case 'KeyA': kl = v; break; case 'KeyD': kr = v; break;
     case 'KeyE': ku = v; break; case 'KeyQ': kd = v; break; case 'ShiftLeft': case 'ShiftRight': ks = v; break;
+    case 'KeyR': if (v && !e.repeat) { if (cord.on) cord.on = false; else castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])); } break;
     case 'Space': if (v && !kj) jumpReq = 1; kj = v; e.preventDefault(); break;
     default: if (v && !e.repeat) {
       if (e.code === 'KeyH') { hud = !hud; info.textContent = ''; }
@@ -314,9 +329,13 @@ const key = (e, v) => {
 };
 addEventListener('keydown', (e) => { if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return; sound(); key(e, 1); });
 addEventListener('keyup', (e) => key(e, 0));
-const release = () => { kf = kb = kl = kr = ku = kd = ks = kj = 0; };
+const release = () => { kf = kb = kl = kr = ku = kd = ks = kj = 0; cord.on = false; };
 const capture = () => { sound(); const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
 canvas.addEventListener('click', () => { if (!menu) capture(); });
+// right button: hold to keep the silver cord
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('mousedown', (e) => { if (e.button === 2 && !menu && !trav) castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])); });
+addEventListener('mouseup', (e) => { if (e.button === 2) cord.on = false; });
 addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) { mdx += e.movementX; mdy += e.movementY; } });
 document.addEventListener('pointerlockchange', () => {
   const on = document.pointerLockElement === canvas;
@@ -339,6 +358,24 @@ document.querySelectorAll('#q button').forEach((b, i) => {
 
 // ---------------------------------------------------------------- per frame: physics
 const lkS = [0, 0];
+// aura: the high-speed mode (Shift). It does not burn anything: a glow gathers around you and you steer like a ship.
+// Holding one direction builds acceleration; to brake, push the other way. No automatic braking out in space.
+let aura = 0, auraHold = 0, auraDir = [0, 0, 0], shake = 0, flash = 0, brakeLock = 0;
+// the silver cord: hooks the ground you look at and reels you in, softly
+const cord = { on: false, a: [0, 0, 0], len: 0, t: 0 };
+// black hole: bhNear 0..1 as you approach, bhIn 0..1 while crossing it
+let bhNear = 0, bhIn = 0, trav = null;
+const BH = SYS.bh;
+function castCord(look) {
+  for (let d = 2; d < 160; d += 0.5) {
+    const x = pos[0] + look[0] * d, y = pos[1] + look[1] * d, z = pos[2] + look[2] * d;
+    for (const p of PL) {
+      if (hypot(x - p.c[0], y - p.c[1], z - p.c[2]) > p.R + p.hmax + 2) continue;
+      if (p.Dw(x, y, z) > 0) { cord.on = true; cord.a = [x, y, z]; cord.len = d; cord.t = 0; speakSound('cord'); return; }
+    }
+  }
+}
+const turb = (t, k) => sin(t * 1.7 + k) * 0.6 + sin(t * 3.1 + k * 2.3) * 0.3 + sin(t * 7.3 + k * 4.1) * 0.1;
 function step(dt) {
   // mouse look, lightly smoothed
   const kq = 1 - exp(-dt * 25);
@@ -346,49 +383,119 @@ function step(dt) {
   const dyw = lkS[0] * kq, dpt = lkS[1] * kq; lkS[0] -= dyw; lkS[1] -= dpt;
   B = qnorm(qmul(B, [0, sin(-dyw / 2), 0, cos(-dyw / 2)]));
   pitch = clamp(pitch - dpt, -1.5, 1.5);
-  // gravity: turn the body so its feet point down the pull
-  gravity(PL, pos[0], pos[1], pos[2], gv);
+  if (trav) return crossing(dt);
+  // gravity: turn the body so its feet point down the pull (slowly while in aura: you steer more like a ship)
+  gravity(PL, pos[0], pos[1], pos[2], gv, BH);
   const gm = hypot(gv[0], gv[1], gv[2]);
   let up = qrot(B, [0, 1, 0]);
   if (gm > 0.03) {
     const tg = [-gv[0] / gm, -gv[1] / gm, -gv[2] / gm], ax = cross3(up, tg), s = hypot(...ax), c = dot3(up, tg);
     if (s > 1e-7) {
-      const rate = groundT > 0 ? 9 : 2.2 * min(1, gm / 0.6), ang = atan2(s, c) * (1 - exp(-dt * rate));
+      const rate = (groundT > 0 ? 9 : 2.2 * min(1, gm / 0.6)) * (aura > 0.5 && groundT <= 0 ? 0.3 : 1), ang = atan2(s, c) * (1 - exp(-dt * rate));
       B = qnorm(qmul([ax[0] / s * sin(ang / 2), ax[1] / s * sin(ang / 2), ax[2] / s * sin(ang / 2), cos(ang / 2)], B));
       up = qrot(B, [0, 1, 0]);
     }
   }
   const F = qrot(B, [0, 0, -1]), Rt = qrot(B, [1, 0, 0]);
-  const cq = qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), look = qrot(cq, [0, 0, -1]);
-  // water: inside the sea of the planet we are on
+  const cq = qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), look = qrot(cq, [0, 0, -1]), cR = qrot(cq, [1, 0, 0]), cU = qrot(cq, [0, 1, 0]);
   inWater = 0; near = -1; let nd = 1e9;
   for (const p of PL) { const d = hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]); if (d - p.R < nd) { nd = d - p.R; near = p.i; } if (p.sea && d < p.sea + 0.3) inWater = 1; }
+  const inAtm = near >= 0 && nd < PL[near].hmax + PL[near].H * 3;
   const mf = kf - kb, mr = kr - kl;
-  let wx = F[0] * mf + Rt[0] * mr, wy = F[1] * mf + Rt[1] * mr, wz = F[2] * mf + Rt[2] * mr;
-  const wl = hypot(wx, wy, wz); if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
-  if (groundT > 0 && !inWater) {
-    const sp = ks ? 9 : 4.5, vn = min(dot3(vel, up), 0) - 0.6, k = 1 - exp(-dt * 9);
-    for (let i = 0; i < 3; i++) { const vt = vel[i] - up[i] * vn, tw = [wx, wy, wz][i] * sp; vel[i] = vt + (tw - vt) * k + up[i] * vn; }
-    if (jumpReq) { for (let i = 0; i < 3; i++) vel[i] += up[i] * 5.5; groundT = 0; }
-  } else {
+  const auraOn = ks && !inWater;
+  const speed = hypot(vel[0], vel[1], vel[2]);
+  if (auraOn) {
+    let tx = look[0] * mf + cR[0] * mr + cU[0] * (ku - kd + kj), ty = look[1] * mf + cR[1] * mr + cU[1] * (ku - kd + kj), tz = look[2] * mf + cR[2] * mr + cU[2] * (ku - kd + kj);
+    const tl = hypot(tx, ty, tz);
+    if (tl > 0.01) {
+      tx /= tl; ty /= tl; tz /= tl;
+      auraHold = tx * auraDir[0] + ty * auraDir[1] + tz * auraDir[2] > 0.85 ? auraHold + dt : 0;
+      auraDir = [tx, ty, tz];
+      // pushing against the motion brakes harder, and the sideways drift fades while braking
+      const sp0 = speed || 1, opp = -(tx * vel[0] + ty * vel[1] + tz * vel[2]) / sp0;
+      const acc = (6 + 40 * pow(min(auraHold / 5, 1), 1.6)) * (opp > 0.3 ? 2.2 : 1);
+      if (opp > 0.3) { const kk = exp(-dt * 0.8); for (let i = 0; i < 3; i++) { const along = -opp * sp0 * [tx, ty, tz][i]; vel[i] = along + (vel[i] - along) * kk; } }
+      vel[0] += tx * acc * dt; vel[1] += ty * acc * dt; vel[2] += tz * acc * dt;
+      groundT = 0;
+    } else { auraHold = 0; brakeLock = 0; }
     for (let i = 0; i < 3; i++) vel[i] += gv[i] * dt;
-    const air = inWater ? 4 : 2.5;
-    vel[0] += wx * air * dt; vel[1] += wy * air * dt; vel[2] += wz * air * dt;
-    // jetpack: Space pushes up, Shift pushes along the look, E / Q up and down
-    if (kj) for (let i = 0; i < 3; i++) vel[i] += up[i] * 4.5 * dt;
-    if (ks) for (let i = 0; i < 3; i++) vel[i] += look[i] * 8 * dt;
-    const cu = qrot(cq, [0, 1, 0]);
-    for (let i = 0; i < 3; i++) vel[i] += cu[i] * (ku - kd) * 4 * dt;
-    let drag = 0.02;
-    if (near >= 0 && nd < PL[near].hmax + PL[near].H * 3) drag = 0.12;
-    if (inWater) { drag = 2.2; for (let i = 0; i < 3; i++) vel[i] += up[i] * gm * 1.25 * dt; }
-    const kk = exp(-drag * dt); for (let i = 0; i < 3; i++) vel[i] *= kk;
+    // turbulence: the faster you go, the more the air (or whatever this is) shakes you
+    const amp = 0.5 * pow(speed, 0.75);
+    vel[0] += turb(time, 0) * amp * dt; vel[1] += turb(time, 5) * amp * dt; vel[2] += turb(time, 9) * amp * dt;
+    if (inAtm) { const kk = exp(-0.15 * dt); for (let i = 0; i < 3; i++) vel[i] *= kk; }
+  } else {
+    auraHold = 0; brakeLock = 0;
+    let wx = F[0] * mf + Rt[0] * mr, wy = F[1] * mf + Rt[1] * mr, wz = F[2] * mf + Rt[2] * mr;
+    const wl = hypot(wx, wy, wz); if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
+    if (groundT > 0 && !inWater) {
+      // walking: slow and floaty, it takes a moment to get going and to stop
+      const sp = 3.2, vr = dot3(vel, up), vn = min(vr, 0) - gm * dt, k = 1 - exp(-dt * 2.6), tw = [wx * sp, wy * sp, wz * sp];
+      for (let i = 0; i < 3; i++) { const vt = vel[i] - up[i] * vr; vel[i] = vt + (tw[i] - vt) * k + up[i] * vn; }
+      if (jumpReq) { for (let i = 0; i < 3; i++) vel[i] += up[i] * 5.5; groundT = 0; }
+    } else {
+      for (let i = 0; i < 3; i++) vel[i] += gv[i] * dt;
+      const air = inWater ? 4 : 1.6;
+      vel[0] += wx * air * dt; vel[1] += wy * air * dt; vel[2] += wz * air * dt;
+      // holding Space in the air: you glide, falling slower
+      if (kj) { const vn = dot3(vel, up); if (vn < 0) for (let i = 0; i < 3; i++) vel[i] -= up[i] * vn * min(1, dt * 1.5); }
+      for (let i = 0; i < 3; i++) vel[i] += cU[i] * (ku - kd) * 2 * dt;
+      let drag = inAtm ? 0.12 : 0.01;
+      if (inWater) { drag = 2.2; for (let i = 0; i < 3; i++) vel[i] += up[i] * gm * 1.25 * dt; }
+      const kk = exp(-drag * dt); for (let i = 0; i < 3; i++) vel[i] *= kk;
+    }
   }
   jumpReq = 0;
-  const vm = hypot(vel[0], vel[1], vel[2]); if (vm > 45) for (let i = 0; i < 3; i++) vel[i] *= 45 / vm;
+  // the silver cord pulls like a loose elastic and reels in
+  if (cord.on) {
+    cord.t += dt;
+    const d = [cord.a[0] - pos[0], cord.a[1] - pos[1], cord.a[2] - pos[2]], L = hypot(...d);
+    cord.len = max(3.5, cord.len - (5 + cord.t * 3) * dt);
+    if (L > 200) cord.on = false;
+    else if (L > cord.len) {
+      const u = d.map((x) => x / L), str = min((L - cord.len) * 2.2, 25), vr = dot3(vel, u);
+      for (let i = 0; i < 3; i++) vel[i] += u[i] * str * dt;
+      if (vr < 0) for (let i = 0; i < 3; i++) vel[i] -= u[i] * vr * min(1, dt * 3);
+    }
+  }
+  const cap = auraOn ? 90 : 60, vm = hypot(vel[0], vel[1], vel[2]); if (vm > cap) for (let i = 0; i < 3; i++) vel[i] *= cap / vm;
   groundT -= dt;
   collide([vel[0] * dt, vel[1] * dt, vel[2] * dt], up);
+  aura += ((auraOn ? 1 : 0) - aura) * (1 - exp(-dt * 4));
+  // black hole: closer than the point of no return and it takes you
+  const dbh = hypot(pos[0] - BH.c[0], pos[1] - BH.c[1], pos[2] - BH.c[2]);
+  bhNear = sstep(220, BH.nr, dbh);
+  if (dbh < BH.nr) startCrossing();
   return cq;
+}
+// ---------------------------------------------------------------- crossing the black hole
+const thoughtEl = $('th');
+function startCrossing() {
+  cord.on = false;
+  trav = { t: 0, dur: rr(130, 175), next: 7, list: thoughtSequence(12), k: 0, show: -99 };
+}
+function crossing(dt) {
+  const T = trav;
+  T.t += dt;
+  bhIn = sstep(0, 5, T.t) * sstep(T.dur, T.dur - 6, T.t);
+  // drifting slowly round the middle, looking wherever you want
+  const a = T.t * 0.05;
+  for (let k = 0; k < 3; k++) vel[k] = 0;
+  pos[0] = BH.c[0] + cos(a) * 3; pos[1] = BH.c[1] + sin(a * 0.7) * 2; pos[2] = BH.c[2] + sin(a) * 3;
+  B = qnorm(qmul(B, [sin(dt * 0.02), 0, sin(dt * 0.013), 1]));
+  // thoughts, far apart
+  if (T.t > T.next && T.k < T.list.length && T.t < T.dur - 12) {
+    thoughtEl.textContent = T.list[T.k++]; thoughtEl.className = 'on'; T.show = T.t; speakSound('thought');
+    T.next = T.t + rr(10, 16);
+  }
+  if (T.t - T.show > 6.5) thoughtEl.className = '';
+  if (T.t >= T.dur) {
+    // thrown out on the other side of the system, towards the planets
+    thoughtEl.className = '';
+    const c = BH.ctr, d = normalize3([c[0] - BH.c[0], c[1] - BH.c[1], c[2] - BH.c[2]]);
+    for (let k = 0; k < 3; k++) { pos[k] = c[k] + d[k] * (BH.far + 70); vel[k] = -d[k] * 16; }
+    trav = null; bhIn = 0; flash = 1; groundT = 0;
+  }
+  return qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]);
 }
 
 // ---------------------------------------------------------------- per frame: camera, uniforms, draw
@@ -417,18 +524,32 @@ function minv(m) {
   return i;
 }
 const tmp3 = [0, 0, 0];
+let fovNow = 1.25, expo = 1, lastVP = null;
+const MOOD_EXPO = { leve: 1.08, enigmatico: 0.95, sinistro: 0.72 };
 function uniforms(cq) {
+  // the view widens with speed and inside the black hole, and shakes with speed and near the hole
+  const spd = hypot(vel[0], vel[1], vel[2]);
+  fovNow += (FOV + 0.38 * sstep(8, 75, spd) * (0.4 + 0.6 * aura) + 0.35 * bhIn - fovNow) * 0.08;
+  shake = 0.006 * sstep(15, 90, spd) * (0.3 + aura) + 0.02 * bhNear * (1 - bhIn);
+  if (shake > 1e-4) {
+    const t = time * 9, q = [turb(t, 1) * shake, turb(t, 4) * shake, turb(t, 7) * shake * 0.5, 1];
+    cq = qnorm(qmul(cq, q));
+  }
   const r = qrot(cq, [1, 0, 0]), u = qrot(cq, [0, 1, 0]), b = qrot(cq, [0, 0, 1]);
   const V = new Float64Array([r[0], u[0], b[0], 0, r[1], u[1], b[1], 0, r[2], u[2], b[2], 0, -dot3(r, pos), -dot3(u, pos), -dot3(b, pos), 1]);
-  const f = 1 / Math.tan(FOV / 2), asp = W / H, P = new Float64Array(16);
+  const f = 1 / Math.tan(fovNow / 2), asp = W / H, P = new Float64Array(16);
   P[0] = f / asp; P[5] = f; P[11] = -1; P[14] = NEAR;
+  // the light follows the mood of the planet you are near
+  let et = 1;
+  for (const p of PL) { const w = sstep(p.hmax + 160, p.hmax + 30, hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]) - p.R); et = mix(et, MOOD_EXPO[p.mood], w); }
+  expo += (et - expo) * 0.02;
   const vp = mmul(P, V), ivp = minv(vp);
   UG.set(vp, 0); UG.set(ivp, 16);
   UG.set([pos[0], pos[1], pos[2], time], 32);
   UG.set([...SUN, 2.6], 36);
   UG.set([W, H, 1 / W, 1 / H], 40);
   UG.set([1 / f, asp, NEAR, 2 / (f * H)], 44);
-  UG.set([...r, 1.0], 48);
+  UG.set([...r, expo], 48);
   UG.set([...u, LV > 1 ? 0.03 : 0.045], 52);
   UG.set([-b[0], -b[1], -b[2], PL.length], 56);
   UG.set([...SYS.neb[0], SYS.nebSeed], 60);
@@ -440,6 +561,8 @@ function uniforms(cq) {
   // lights: the lamp, then the nearest spirits
   const L = [];
   if (lamp) { const lf = qrot(cq, [0, 0, -1]); L.push([pos[0] + lf[0] * 0.5, pos[1] + lf[1] * 0.5, pos[2] + lf[2] * 0.5, 1.6, 1, 0.92, 0.8, 30, 0]); }
+  // the aura lights the ground you skim over
+  if (aura > 0.05) L.push([pos[0] - u[0] * 0.5, pos[1] - u[1] * 0.5, pos[2] - u[2] * 0.5, 2.5 * aura, 0.6, 0.7, 1.3, 26, 0]);
   const cand = lightsStatic.map((l) => [...l, hypot(l[0] - pos[0], l[1] - pos[1], l[2] - pos[2])]);
   for (let i = 0; i < nSpirit; i++) {
     const o = i * 16; if (spiritArr[o + 13] > 1.5) continue;
@@ -451,9 +574,32 @@ function uniforms(cq) {
   for (const c of cand) { if (L.length >= 12) break; L.push(c); }
   L.forEach((l, i) => UG.set([l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7]], 124 + i * 8));
   UG.set([...SYS.neb[2], L.length], 68);
+  UG.set([vel[0], vel[1], vel[2], aura], 220);
+  UG.set([spd, shake, bhIn, flash], 224);
+  UG.set([...BH.c, BH.rs], 228);
+  UG.set([...BH.n, bhIn > 0.5 ? 0 : 1], 232);
+  lastVP = vp;
   Q.writeBuffer(uboG, 0, UG);
 }
 const SKIP = (QS.get('skip') || '').split(',');
+// the silver cord: points along a loose, sagging, slightly waving curve from your hand to the anchor
+const CORDN = 260, cordArr = new Float32Array(CORDN * 8), bCord = device.createBuffer({ size: cordArr.byteLength, usage: BU.VERTEX | BU.COPY_DST });
+function updateCord(cq) {
+  const R = qrot(cq, [1, 0, 0]), U = qrot(cq, [0, 1, 0]), Fw = qrot(cq, [0, 0, -1]);
+  const h = [0, 1, 2].map((k) => pos[k] + Fw[k] * 0.7 + R[k] * 0.28 - U[k] * 0.32);
+  const d = [0, 1, 2].map((k) => cord.a[k] - h[k]), L = hypot(...d);
+  const gl = hypot(gv[0], gv[1], gv[2]) || 1, down = [gv[0] / gl, gv[1] / gl, gv[2] / gl];
+  const slack = clamp(1.25 - L / max(cord.len, 1), 0.08, 0.6), side = normalize3(cross3(d, down));
+  for (let i = 0; i < CORDN; i++) {
+    const t = pow(i / (CORDN - 1), 1.7), sag = 4 * t * (1 - t) * L * 0.18 * slack, wv = sin(t * 9.4 - time * 5) * 0.12 * slack * L * 0.05 * sin(PI * t);
+    for (let k = 0; k < 3; k++) cordArr[i * 8 + k] = h[k] + d[k] * t + down[k] * sag + side[k] * wv;
+    const sp = (i * 7919 % 97) / 97;
+    cordArr[i * 8 + 3] = sp > 0.93 ? 0.05 : 0.022;
+    cordArr[i * 8 + 4] = 0.85; cordArr[i * 8 + 5] = 0.9; cordArr[i * 8 + 6] = 1.05;
+    cordArr[i * 8 + 7] = sp + (sp > 0.97 ? 1 : 0);
+  }
+  Q.writeBuffer(bCord, 0, cordArr);
+}
 let snapTex = null;
 function render() {
   const e = device.createCommandEncoder();
@@ -476,6 +622,13 @@ function render() {
   PL.forEach((p, i) => { const g = PD[i]; if (!g.gn || SKIP.includes('spr')) return; r.setBindGroup(1, g.bg); r.setPipeline(pGlint); r.setVertexBuffer(0, g.gl); r.draw(4, g.gn); });
   r.setBindGroup(1, PD[0].bg);
   if (!SKIP.includes('spr')) {
+  // dark translucent souls, after everything solid
+  if (!SKIP.includes('spirit')) {
+    r.setPipeline(pSpiritT); r.setVertexBuffer(0, mFig.vb); r.setVertexBuffer(1, bSpirit); r.setIndexBuffer(mFig.ib, 'uint32'); r.drawIndexed(mFig.n, nSpirit);
+    PL.forEach((p, i) => { const g = PD[i]; if (!g.sn) return; r.setBindGroup(1, g.bg); r.setVertexBuffer(0, mSeat.vb); r.setVertexBuffer(1, g.st); r.setIndexBuffer(mSeat.ib, 'uint32'); r.drawIndexed(mSeat.n, g.sn); });
+    r.setBindGroup(1, PD[0].bg);
+  }
+  if (cord.on) { r.setPipeline(pCord); r.setVertexBuffer(0, bCord); r.draw(4, CORDN); }
   r.setPipeline(pTrail); r.setVertexBuffer(0, bTrail); r.draw(4, nTrail);
   r.setPipeline(pDust); r.setVertexBuffer(0, bDust); r.draw(4, nDust);
   }
@@ -500,6 +653,43 @@ function render() {
 // ---------------------------------------------------------------- loop
 let last = performance.now(), dynT = 0, dynN = 0, hN = 0, hT = 0, hMax = 0, labelT = 0, lastNear = -1;
 const label = $('n');
+// ---------------------------------------------------------------- souls speaking
+// come close to a soul and look at it: it says something, written on the screen next to it
+const talkEl = $('t'), tmpS = [0, 0, 0];
+let talk = null, lastTalk = -99;
+function talkUpdate(dt) {
+  if (trav) { if (talk) { talkEl.className = ''; talk = null; } return; }
+  const look = qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1]);
+  if (!talk && time - lastTalk > 3) {
+    let best = null, bd = 1e9;
+    for (const s of souls) {
+      if (s.cool > time) continue;
+      s.pos(tmpS);
+      const dx = tmpS[0] - pos[0], dy = tmpS[1] - pos[1], dz = tmpS[2] - pos[2], d = hypot(dx, dy, dz);
+      if (d > 7 + 2.5 * s.scale || (dx * look[0] + dy * look[1] + dz * look[2]) / d < 0.35) continue;
+      if (d < bd) { bd = d; best = s; }
+    }
+    if (best) {
+      const line = soulLine(best.kind, best.said);
+      talk = { s: best, line, t: 0, dur: 3.5 + line.length * 0.07 };
+      best.cool = time + 25; lastTalk = time; speakSound('soul');
+    }
+  }
+  if (!talk) return;
+  talk.t += dt;
+  talk.s.pos(tmpS);
+  const d = hypot(tmpS[0] - pos[0], tmpS[1] - pos[1], tmpS[2] - pos[2]);
+  // written out letter by letter, beside the soul
+  talkEl.textContent = talk.line.slice(0, max(1, talk.t * 32 | 0));
+  const up = qrot(B, [0, 1, 0]), m = lastVP, x = tmpS[0] + up[0] * 1.2 * talk.s.scale, y = tmpS[1] + up[1] * 1.2 * talk.s.scale, z = tmpS[2] + up[2] * 1.2 * talk.s.scale;
+  const cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+  if (cw > 0.1) {
+    const sx = ((m[0] * x + m[4] * y + m[8] * z + m[12]) / cw * 0.5 + 0.5) * innerWidth, sy = (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw * 0.5) * innerHeight;
+    talkEl.style.left = clamp(sx, 160, innerWidth - 160) + 'px'; talkEl.style.top = clamp(sy, 60, innerHeight - 60) + 'px';
+  }
+  talkEl.className = cw > 0.1 ? 'on' : '';
+  if (talk.t > talk.dur || d > 30) { talkEl.className = ''; talk = null; }
+}
 function frame(now) {
   window.__frames = (window.__frames || 0) + 1;
   requestAnimationFrame(frame);
@@ -514,13 +704,20 @@ function frame(now) {
     const s2 = clamp(scale * k, 0.5, 1); if (s2 !== scale) { scale = s2; resize(); }
     dynT = dynN = 0;
   }
+  // headless tests drive the simulation themselves (__game.frameStep) and only ask for pictures
+  if (HEADLESS) {
+    if (window.__snapReq) { window.__snapReq = 0; uniforms(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)])); snap().then((u) => (window.__snapRes = u), (e) => (window.__snapRes = 'ERR ' + e.message)); }
+    return;
+  }
   const cq = menu ? qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]) : step(dt);
   if (menu) { B = qnorm(qmul(B, [0, sin(-dt * 0.02), 0, cos(-dt * 0.02)])); }
   uniforms(cq);
-  if (window.__snapReq) { window.__snapReq = 0; snap().then((u) => (window.__snapRes = u), (e) => (window.__snapRes = 'ERR ' + e.message)); return; }
-  if (!HEADLESS) render();
+  if (cord.on) updateCord(cq);
+  if (!menu) talkUpdate(dt);
+  flash = max(0, flash - dt * 0.6);
+  render();
   // the planet's name when you arrive on it
-  if (!menu && groundT > 0 && near !== lastNear) { lastNear = near; label.textContent = `${PL[near].name} · ${BIOMES[PL[near].biome]}`; label.className = 'on'; labelT = 4; }
+  if (!menu && groundT > 0 && near !== lastNear) { const p = PL[near]; lastNear = near; label.textContent = `${p.name} · ${BIOMES[p.biome]} · ${MOOD_NAMES[p.mood]} · ${p.g.toFixed(1)} m/s²`; label.className = 'on'; labelT = 5; }
   if (labelT > 0 && (labelT -= dt) <= 0) label.className = '';
   if (hud) {
     hN++; hT += dtr; if (dtr > hMax) hMax = dtr;
@@ -533,7 +730,7 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------- start
-spawn(PL.findIndex((p) => p.biome === 0 || p.biome === 4) >= 0 ? PL.findIndex((p) => p.biome === 0 || p.biome === 4) : 0, false);
+spawn(max(0, PL.findIndex((p) => p.mood === 'leve')), false);
 { const p = PL.find((q) => hypot(pos[0] - q.c[0], pos[1] - q.c[1], pos[2] - q.c[2]) < q.R + q.hmax + 5); lastNear = p ? p.i : -1; }
 await say('Pronto', 1, 300);
 keep('planetasLoad', '');
@@ -569,5 +766,5 @@ function lookFrom(from, to) {
   const yaw = atan2(dot3(cross3(f, h), up), dot3(f, h));
   B = qnorm(qmul(B, [0, sin(yaw / 2), 0, cos(yaw / 2)])); pitch = Math.asin(clamp(dot3(dir, up), -1, 1)); groundT = 0;
 }
-window.__game = { lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
+window.__game = { proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
 requestAnimationFrame(frame);

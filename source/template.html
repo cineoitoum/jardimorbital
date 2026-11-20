@@ -85,12 +85,20 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 .g #x { display: block; }
 #n { position: absolute; left: 0; right: 0; bottom: 12%; text-align: center; font: 300 1.6em/1 system-ui, sans-serif; letter-spacing: .5em; text-transform: uppercase; color: #fff; text-shadow: 0 0 1em #8f73ff; opacity: 0; transition: opacity 1.5s; pointer-events: none; }
 .g #n.on { opacity: .85; }
+/* a soul speaking: handwritten-looking line beside it, letter by letter */
+#t { position: absolute; max-width: 22em; transform: translate(-50%, -100%); padding: .4em .9em; font: italic 400 1.05em/1.45 Georgia, 'Times New Roman', serif; color: #f4efff; text-align: center; text-shadow: 0 0 .6em #8f73ff, 0 0 .2em #000; opacity: 0; transition: opacity .8s; pointer-events: none; }
+.g #t.on { opacity: .95; }
+/* thoughts inside the black hole */
+#th { position: absolute; left: 10%; right: 10%; top: 42%; text-align: center; font: italic 300 1.6em/1.5 Georgia, 'Times New Roman', serif; color: #fff; text-shadow: 0 0 1em #000, 0 0 2em #6a4cff; opacity: 0; transition: opacity 2.5s; pointer-events: none; }
+.g #th.on { opacity: .9; }
 </style>
 </head>
 <body class=l>
 <canvas id=c></canvas>
 <div id=x></div>
 <div id=n></div>
+<div id=t></div>
+<div id=th></div>
 <div id=m>
   <h1>Jardim Orbital</h1>
   <div id=a>
@@ -101,10 +109,11 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
       <p id=q><span>Detalhe</span><button>Baixo</button><button>Médio</button><button>Alto</button></p>
       <div id=k>
         <p>
-          <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Andar
-          <i><b>Espaço</b></i>Pular · segure: jetpack
-          <i><b>Shift</b></i>Correr · no ar: impulso
-          <i><b>E</b><b>Q</b></i>Subir / descer no ar
+          <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Andar, flutuando
+          <i><b>Espaço</b></i>Pular · segure: planar
+          <i><b>Shift</b></i>Aura: voar como nave
+          <i><b>E</b><b>Q</b></i>Subir / descer
+          <i><b>Botão dir.</b><b>R</b></i>Cordão de prata
         </p>
         <p>
           <i><b>1</b>–<b>3</b></i>Órbita dos planetas

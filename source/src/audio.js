@@ -1,71 +1,169 @@
 // ============================================================================
-// audio: procedural space ambience (no sample files) — adapted from Abyssal Garden (MIT)
+// audio: procedural ambience and one generated piece of music per planet (no sample files)
 // ============================================================================
-// A fixed Web Audio graph, built on the first click / key / touch and driven by a 10 Hz timer, not the frame loop.
-// Layers: rumble, wind (follows speed and how deep in an atmosphere you are), drone, chimes and the spirits' slow songs.
-let AC, OUT, muted = false;
-const VOL = 0.78; // master level: about -18.5 LUFS, peaks near -5.5 dBFS
+// The ambience graph comes from Abyssal Garden (MIT): rumble, wind that follows speed, a drone and chimes for open
+// space. On top, every planet has its own piece, written from its seed and its mood:
+//   leve        major / lydian, plucked arpeggios through an echo, warm pad, soft bass
+//   enigmatico  whole-tone and odd scales, FM bells at irregular times, a drifting cluster pad, glass shimmer
+//   sinistro    phrygian / locrian, a slow heartbeat, a growling low voice, dissonant swells, metal scrapes
+// The pieces cross-fade with distance; inside the black hole everything sinks under a deep drone.
+let AC, OUT, muted = false, SPEAK = null;
+const VOL = 0.78;
 function mkSound(ac) {
   const sr = ac.sampleRate;
-  // node of class C with options o, connected to every node / param in `to`; sources start at once
   const N = (C, o, ...to) => { const n = new C(ac, o); for (const d of to) n.connect(d); if (n.start) n.start(); return n; };
   const G = (gain, ...to) => N(GainNode, { gain }, ...to);
   const BQ = (type, frequency, Q, ...to) => N(BiquadFilterNode, { type, frequency, Q }, ...to);
   const lfo = (frequency, depth, to) => N(OscillatorNode, { frequency }, G(depth, to));
   const noise = (secs, f) => { const n = sr * secs | 0, b = new AudioBuffer({ length: n, numberOfChannels: 2, sampleRate: sr }); f(b.getChannelData(0), n); f(b.getChannelData(1), n); return b; };
-  // seamless brown noise loop (the end cross-fades into the start)
   const nb = noise(11, (d, n) => { for (let i = 0, b = 0; i < n + 4096; i++) { b = (b + 0.02 * (rnd() * 2 - 1)) / 1.02; if (i < n) d[i] = b * 3.5; else { const k = (i - n) / 4096; d[i - n] = d[i - n] * k + b * 3.5 * (1 - k); } } });
-  // reverb impulse: 5 s of noise that fades out and gets darker
+  const wn = noise(2, (d, n) => { for (let i = 0; i < n; i++) d[i] = rnd() * 2 - 1; });
   const ir = noise(5, (d, n) => { for (let i = 0, b = 0; i < n; i++) { const t = i / sr; b += (rnd() * 2 - 1 - b) * (0.04 + 0.5 * exp(-t * 2)); d[i] = b * (1 - exp(-t * 30)) * exp(-t * 1.5) * (1 - i / n); } });
 
-  const lim = N(DynamicsCompressorNode, { threshold: -6, knee: 6, ratio: 20, attack: 0.003, release: 0.3 }, ac.destination);
+  const lim = N(DynamicsCompressorNode, { threshold: -8, knee: 6, ratio: 12, attack: 0.003, release: 0.3 }, ac.destination);
   const out = OUT = G(0, lim), wet = N(ConvolverNode, { buffer: ir }, out);
-  const src = (playbackRate, ...to) => N(AudioBufferSourceNode, { buffer: nb, loop: true, playbackRate }, ...to);
-  // rumble
-  const rum = G(0.34, out); src(1, BQ('lowpass', 150, 0.7, rum)); lfo(0.07, 0.11, rum.gain); lfo(0.113, 0.08, rum.gain);
-  // surface wash + water rush: the same noise played at another speed, so the loops never line up
-  const wash = G(0.25, out), wave = G(1, wash), rush = G(0, out), rushF = BQ('bandpass', 300, 0.9, rush);
-  src(0.63, BQ('bandpass', 420, 0.5, wave), rushF); lfo(0.09, 0.3, wave.gain); lfo(0.151, 0.25, wave.gain);
-  // drone: stacked fifths on D, each note a pair of slightly detuned sines that slowly beat
-  const pad = G(1, out, G(1.5, wet));
-  [73.42, 110, 164.81, 246.94, 369.99].forEach((f, i) => { const g = G(0.022 - i * 0.003, pad); N(OscillatorNode, { frequency: f }, g); N(OscillatorNode, { frequency: f + rr(0.03, 0.11) }, g); });
-  // pooled voices: oscillator -> envelope -> pan -> dry + reverb
-  const pool = (n, send, type) => Array.from({ length: n }, () => { const p = N(StereoPannerNode, {}, out, G(send, wet)), g = G(0, p); return { p, g, o: N(OscillatorNode, { type }, g) }; });
-  const bub = pool(4, 0.12), chime = pool(3, 1.2), whale = pool(2, 2, 'triangle');
-  // one note: pitch glides f0 -> f1 over dur, level rises to vol in att then dies away
-  const play = (vs, t, f0, f1, dur, vol, att) => {
-    const v = vs.shift(), f = v.o.frequency, g = v.g.gain; vs.push(v);
-    v.p.pan.setValueAtTime(rr(-0.7, 0.7), t);
-    f.setValueAtTime(f0, t); f.exponentialRampToValueAtTime(f1, t + dur);
-    g.setValueAtTime(0, t); g.linearRampToValueAtTime(vol, t + att); g.setTargetAtTime(0, t + att, (dur - att) / 5);
+  // a shared echo for plucks and bells
+  const echo = N(DelayNode, { delayTime: 0.42, maxDelayTime: 2 }), fb = G(0.38, echo);
+  echo.connect(fb); echo.connect(out); echo.connect(G(0.5, wet));
+  const src = (buffer, playbackRate, ...to) => N(AudioBufferSourceNode, { buffer, loop: true, playbackRate }, ...to);
+  // rumble + wind (follows speed)
+  const rum = G(0.28, out); src(nb, 1, BQ('lowpass', 150, 0.7, rum)); lfo(0.07, 0.09, rum.gain);
+  const rush = G(0, out), rushF = BQ('bandpass', 300, 0.9, rush); src(nb, 0.63, rushF);
+  // open space: drone of stacked fifths and chimes (from Abyssal Garden)
+  const space = G(0, out, G(1.2, wet));
+  [73.42, 110, 164.81, 246.94, 369.99].forEach((f, i) => { const g = G(0.02 - i * 0.003, space); N(OscillatorNode, { frequency: f }, g); N(OscillatorNode, { frequency: f + rr(0.03, 0.11) }, g); });
+  // the black hole: a very low beating drone and a hollow wind
+  const hole = G(0, out, G(1.5, wet));
+  for (const f of [27.5, 41.2, 55.1]) { const g = G(0.12, hole); N(OscillatorNode, { frequency: f }, g); N(OscillatorNode, { frequency: f * 1.006 }, g); }
+  src(nb, 0.4, BQ('bandpass', 180, 3, G(0.5, hole)));
+
+  // ---------------------------------------------------------------- notes
+  // a voice made for one note and thrown away; env: attack, decay time constant, level
+  const voice = (dest, type, f, t, att, dec, vol, o = {}) => {
+    const g = G(0, dest), osc = new OscillatorNode(ac, { type, frequency: f });
+    let to = g;
+    if (o.lp) { to = new BiquadFilterNode(ac, { type: 'lowpass', frequency: o.lp, Q: o.q || 0.7 }); to.connect(g); }
+    osc.connect(to);
+    if (o.fm) { // frequency modulation: a bell or a glassy tone
+      const m = new OscillatorNode(ac, { frequency: f * o.fm }), mg = new GainNode(ac, { gain: 0 });
+      m.connect(mg); mg.connect(osc.frequency);
+      mg.gain.setValueAtTime(f * (o.idx || 2), t); mg.gain.setTargetAtTime(0, t, dec * 0.4);
+      m.start(t); m.stop(t + att + dec * 6);
+    }
+    if (o.glide) osc.frequency.setTargetAtTime(f * o.glide, t, dec * 0.5);
+    if (o.det) osc.detune.value = o.det;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + att); g.gain.setTargetAtTime(0, t + att, dec);
+    osc.start(t); osc.stop(t + att + dec * 6);
+    return osc;
   };
-  const NOTES = [0, 2, 5, 7, 9, 12, 14, 17, 19]; // D major pentatonic, in semitones above A4
-  let lt = ac.currentTime, tB = lt + 1.5, tC = lt + 5, tW = lt + 12, lx = pos[0], ly = pos[1], lz = pos[2];
+  const hz = (root, semis) => root * pow(2, semis / 12);
+  const SCALES = {
+    leve: [[0, 2, 4, 7, 9], [0, 2, 4, 6, 7, 9, 11], [0, 2, 4, 5, 7, 9, 11]],
+    enigmatico: [[0, 2, 4, 6, 8, 10], [0, 1, 4, 6, 7, 10], [0, 3, 4, 7, 8, 11], [0, 1, 5, 6, 8, 11]],
+    sinistro: [[0, 1, 3, 5, 6, 8, 10], [0, 1, 4, 5, 7, 8, 10], [0, 2, 3, 6, 7, 8, 11]],
+  };
+  // one piece per planet, from its own random stream so the music is the same every visit
+  function makeSong(p, bus) {
+    let st = (p.seed * 9973 | 0) + 17;
+    const r = () => { st = (st + 0x6D2B79F5) | 0; let t = Math.imul(st ^ (st >>> 15), 1 | st); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const rg = (a, b) => a + (b - a) * r(), pk = (a) => a[r() * a.length | 0];
+    const mood = p.mood, sc = pk(SCALES[mood]), n = sc.length;
+    const deg = (d) => sc[((d % n) + n) % n] + 12 * floor(d / n);
+    const root = mood === 'leve' ? hz(196, r() * 7 | 0) : mood === 'enigmatico' ? hz(146.8, r() * 6 | 0) : hz(41.2, r() * 5 | 0);
+    const step = mood === 'leve' ? rg(0.2, 0.3) : mood === 'enigmatico' ? rg(0.26, 0.4) : rg(0.6, 0.85);
+    const prog = Array.from({ length: 4 }, (_, i) => (i ? pk([1, 2, 3, 4, 5, -1, -2]) : 0));
+    const barLen = mood === 'sinistro' ? 8 : 16;
+    const pad = G(1, bus, G(0.9, wet)), lead = G(1, bus), dly = G(0.5, echo);
+    lead.connect(dly);
+    let next = 0, k = 0, mel = n, bar = 0;
+    return {
+      reset(t) { next = t + 0.1; },
+      tick(t0, t1) {
+        if (next < t0) next = t0;
+        while (next < t1) {
+          const t = next;
+          if (k % barLen === 0) {
+            // a new chord on the pad
+            const c = prog[bar++ % prog.length], dur = step * barLen;
+            const notes = mood === 'enigmatico' ? [0, 1, 3, 5] : mood === 'sinistro' ? [0, 2, 3] : [0, 2, 4, 6];
+            for (const d of notes) {
+              const f = hz(root, deg(c + d)) * (mood === 'sinistro' ? 2 : 1);
+              voice(pad, mood === 'sinistro' ? 'sawtooth' : mood === 'leve' ? 'triangle' : 'sine', f, t, dur * 0.35, dur * 0.35, mood === 'sinistro' ? 0.025 : 0.03,
+                { lp: mood === 'sinistro' ? 420 : mood === 'leve' ? 1600 : 1100, det: rg(-9, 9), glide: mood === 'enigmatico' ? pow(2, rg(-0.3, 0.3) / 12) : 0 });
+            }
+            if (mood === 'leve') voice(pad, 'sine', hz(root / 2, deg(c)), t, 0.05, step * 6, 0.12);
+            if (mood === 'sinistro' && r() < 0.5) voice(pad, 'sawtooth', hz(root * 4, deg(c) + 6), t + step * 2, step * 3, step * 3, 0.012, { lp: 900 }); // the tritone swell
+          }
+          // melody: a random walk over the scale
+          const pn = mood === 'leve' ? 0.6 : mood === 'enigmatico' ? 0.38 : 0.18;
+          if (r() < pn) {
+            mel += pk([-2, -1, -1, 1, 1, 2, 0, 3, -3]); mel = clamp(mel, 0, n * 2 + 2);
+            const f = hz(root, deg(mel)) * (mood === 'sinistro' ? 4 : 2);
+            if (mood === 'leve') voice(lead, 'triangle', f, t, 0.005, 0.35, 0.07);
+            else if (mood === 'enigmatico') voice(lead, 'sine', f, t + rg(0, step * 0.5), 0.004, rg(0.6, 1.4), 0.06, { fm: pk([1.41, 2.76, 3.5, 1.83]), idx: rg(1, 4) });
+            else voice(lead, 'sawtooth', f / 2, t, rg(0.05, 0.4), rg(0.8, 1.6), 0.05, { lp: 380, q: 6, glide: pk([1, 1, 0.94, 1.06]) });
+          }
+          if (mood === 'sinistro' && k % 4 === 0) { // heartbeat
+            voice(bus, 'sine', 62, t, 0.005, 0.09, 0.45, { glide: 0.55 });
+            voice(bus, 'sine', 58, t + step * 0.38, 0.005, 0.08, 0.3, { glide: 0.55 });
+          }
+          if (mood === 'sinistro' && r() < 0.012) { // metal scrape
+            const s = new AudioBufferSourceNode(ac, { buffer: wn, loop: true }), f = new BiquadFilterNode(ac, { type: 'bandpass', frequency: rg(900, 2500), Q: 25 }), g = new GainNode(ac, { gain: 0 });
+            s.connect(f); f.connect(g); g.connect(bus); g.connect(wet);
+            f.frequency.setTargetAtTime(rg(300, 700), t, 1.5);
+            g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.09, t + 1.2); g.gain.setTargetAtTime(0, t + 1.5, 0.8);
+            s.start(t); s.stop(t + 6);
+          }
+          if (mood === 'enigmatico' && r() < 0.03) { // glass shimmer
+            for (let j = 0; j < 4; j++) voice(lead, 'sine', hz(root * 8, deg(mel + j * 2)), t + j * 0.07, 0.01, 0.8, 0.015);
+          }
+          next += step * (mood === 'enigmatico' ? pk([1, 1, 1, 0.5, 1.5, 0.75]) : 1);
+          k++;
+        }
+      },
+    };
+  }
+  const songs = PL.map((p) => {
+    const lp = BQ('lowpass', 18000, 0.5, G(1, out)), bus = G(0, lp);
+    return { bus, lp, song: makeSong(p, bus), w: 0 };
+  });
+  // a soul speaking: a soft glide; a thought inside the black hole: a low bell
+  SPEAK = (kind) => {
+    const t = ac.currentTime + 0.02, f = kind === 'thought' ? rr(220, 330) : rr(330, 660);
+    const p = N(StereoPannerNode, { pan: rr(-0.4, 0.4) }, out, G(1.5, wet));
+    voice(p, 'sine', f, t, 0.3, 0.9, 0.05, { glide: rr(0.8, 1.25) });
+    voice(p, 'sine', f * 1.5, t + 0.15, 0.4, 0.8, 0.025);
+  };
+  const NOTES = [0, 2, 5, 7, 9, 12, 14, 17, 19];
+  const chime = (t) => { const f = 440 * pow(2, NOTES[rnd() * 9 | 0] / 12), p = N(StereoPannerNode, { pan: rr(-0.7, 0.7) }, space, G(1.2, wet)); voice(p, 'sine', f, t, 0.03, 1, 0.03); };
+  let lt = ac.currentTime, tC = lt + 5, lx = pos[0], ly = pos[1], lz = pos[2];
   out.gain.setTargetAtTime(VOL, lt, 1);
   return () => {
     const now = ac.currentTime, t = now + 0.05, dt = now - lt;
     if (dt <= 0) return;
-    let v = hypot(pos[0] - lx, pos[1] - ly, pos[2] - lz) / dt; if (v > 60) v = 0; // ignore jumps to a viewpoint
+    let v = hypot(pos[0] - lx, pos[1] - ly, pos[2] - lz) / dt; if (v > 150) v = 0;
     lt = now; lx = pos[0]; ly = pos[1]; lz = pos[2];
-    rush.gain.setTargetAtTime(0.5 * pow(min(v / 26, 1), 1.2), t, 0.3); rushF.frequency.setTargetAtTime(220 + v * 14, t, 0.3);
-    const s = near >= 0 ? clamp(1 - (hypot(pos[0] - PL[near].c[0], pos[1] - PL[near].c[1], pos[2] - PL[near].c[2]) - PL[near].R) / 60, 0, 1) : 0; wash.gain.setTargetAtTime(0.06 + 0.3 * s * s, t, 0.5);
-    if (inWater && t > tB) { // a burst of 1-6 bubbles: short rising blips, smaller bubbles higher and shorter
-      let tt = t;
-      for (let n = 1 + rnd() * rnd() * 6 | 0; n--;) { const f = rr(380, 1300); play(bub, tt, f, f * rr(1.4, 2.2), 0.05 + 40 / f, rr(0.03, 0.08), 0.006); tt += rr(0.07, 0.2); }
-      tB = tt + rr(0.5, 5);
+    rush.gain.setTargetAtTime(0.5 * pow(min(v / 60, 1), 1.2) + aura * 0.08, t, 0.3); rushF.frequency.setTargetAtTime(220 + v * 10, t, 0.3);
+    // which planet's music: by distance to its surface
+    let wmax = 0;
+    for (let i = 0; i < songs.length; i++) {
+      const p = PL[i], s = songs[i], d = hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]) - p.R;
+      const w = sstep(p.hmax + 150, p.hmax + 30, d) * (1 - bhIn);
+      if (w > 0.01 && s.w <= 0.01) s.song.reset(now);
+      s.w = w; wmax = max(wmax, w);
+      s.bus.gain.setTargetAtTime(w * 0.9, t, 1.2);
+      s.lp.frequency.setTargetAtTime(mix(18000, 350, max(bhNear, bhIn)), t, 0.5);
+      if (w > 0.01) s.song.tick(now, now + 0.5);
     }
-    if (t > tC) { const f = 440 * pow(2, NOTES[rnd() * 9 | 0] / 12); play(chime, t, f, f, 5, rr(0.02, 0.04), 0.03); tC = t + rr(2.5, 9); }
-    if (t > tW) { // a phrase of 2-3 slow glides
-      let tt = t;
-      for (let n = 2 + rnd() * 2 | 0; n--;) { const f = rr(170, 380), d = rr(1.6, 3.2); play(whale, tt, f, f * rr(0.6, 1.7), d, 0.08, d * 0.4); tt += d * 0.8; }
-      tW = tt + rr(20, 50);
-    }
+    space.gain.setTargetAtTime((1 - wmax) * (1 - bhIn) * 1, t, 1.5);
+    hole.gain.setTargetAtTime(max(bhIn, bhNear * 0.6) * 0.9, t, 1);
+    if (t > tC && wmax < 0.5 && !bhIn) { chime(t); tC = t + rr(2.5, 9); }
   };
 }
-// called on every click / key / touch: builds the graph once and resumes it when the browser allows
 function sound() {
   if (!AC) { AC = new AudioContext({ latencyHint: 'playback' }); setInterval(mkSound(AC), 100); }
   if (AC.state === 'suspended' && !document.hidden) AC.resume();
 }
-const mute = () => { muted = !muted; OUT.gain.setTargetAtTime(muted ? 0 : VOL, AC.currentTime, 0.08); };
+const mute = () => { muted = !muted; if (OUT) OUT.gain.setTargetAtTime(muted ? 0 : VOL, AC.currentTime, 0.08); };
+const speakSound = (kind) => { if (SPEAK && !muted) SPEAK(kind); };
 document.addEventListener('visibilitychange', () => { if (AC) document.hidden ? AC.suspend() : AC.resume(); });

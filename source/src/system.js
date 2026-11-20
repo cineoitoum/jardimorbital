@@ -30,6 +30,11 @@ const NEBULAE = [
   ['#1a4aff', '#2a6aff', '#7a3aff'],  // blue filaments
   ['#c0306a', '#5a2a9a', '#2a7aff'],  // magenta and violet
 ];
+// each planet has a mood: its music, its light, its gravity
+//   leve: light music, floaty gravity · enigmatico: strange music, earth gravity · sinistro: dark music, heavy gravity
+const MOODS = ['leve', 'enigmatico', 'sinistro'];
+const MOOD_NAMES = { leve: 'leve', enigmatico: 'enigmático', sinistro: 'sinistro' };
+const MOOD_OF_BIOME = [0, 1, 2, 1, 0];
 const SYL = ['ka', 'lu', 'mi', 'ra', 'no', 've', 'si', 'ta', 'or', 'el', 'zu', 'an', 'is', 'ko', 'ne', 'ya', 'th', 'ae'];
 const nameOf = () => { let s = ''; for (let n = 2 + (rnd() * 2 | 0); n--;) s += SYL[rnd() * SYL.length | 0]; return s[0].toUpperCase() + s.slice(1); };
 
@@ -39,9 +44,14 @@ function makeSystem(seed, count = 3) {
   // pick `count` different biomes
   const order = [0, 1, 2, 3, 4];
   for (let i = order.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [order[i], order[j]] = [order[j], order[i]]; }
-  const planets = [];
+  const planets = [], used = new Set();
   for (let i = 0; i < count; i++) {
     const biome = order[i], pal = PALETTES[biome]();
+    let mood = MOODS[MOOD_OF_BIOME[biome]];
+    if (used.has(mood)) mood = MOODS.find((m) => !used.has(m)) || mood;
+    used.add(mood);
+    const dark = mood === 'sinistro';
+    if (dark) { for (const k of [0, 1, 2, 3, 4, 8, 9]) pal.col[k] = '#' + hex(pal.col[k]).map((c) => round(c * 255 * 0.62).toString(16).padStart(2, '0')).join(''); pal.dens *= 1.3; }
     const R = rr(62, 92);
     const A = R * [0.07, 0.11, 0.2, 0.05, 0.08][biome];
     const seaOff = [-0.35, -1.1, -0.15, -0.6, -0.4][biome] * A + rr(-0.15, 0.15) * A;
@@ -57,20 +67,40 @@ function makeSystem(seed, count = 3) {
     }
     planets.push({
       i, biome, name: nameOf(), c, R, A, hmax: A * (biome === 2 || biome === 4 ? 2.4 : 1.4) + 5,
-      sea: hasSea ? R + seaOff : 0, g: rr(1.4, 2.2), seed: rr(0, 200),
+      sea: hasSea ? R + seaOff : 0, g: mood === 'leve' ? rr(0.8, 1.2) : mood === 'enigmatico' ? rr(8.8, 10.5) : rr(14, 17), mood, seed: rr(0, 200),
       col: pal.col.map((h) => jit(lin(h), 0.12)), atm: jit(lin(pal.atm), 0.1), dens: pal.dens * rr(0.8, 1.25), H: pal.H * rr(0.85, 1.2), emis: pal.emis,
     });
   }
   const neb = NEBULAE[rnd() * NEBULAE.length | 0].map((h) => jit(lin(h), 0.15));
-  return { seed, sun, planets, neb, nebStyle: rnd() < 0.5 ? 0 : 1, nebSeed: rr(0, 100) };
+  // a black hole out past the planets: rs is the visual radius, nr the point of no return
+  const ctr = [0, 1, 2].map((k) => planets.reduce((a, p) => a + p.c[k], 0) / planets.length);
+  const far = max(...planets.map((p) => hypot(p.c[0] - ctr[0], p.c[1] - ctr[1], p.c[2] - ctr[2]) + p.R));
+  let bc = null;
+  for (let tries = 0; tries < 100 && !bc; tries++) {
+    const d = (() => { const v = [rr(-1, 1), rr(-0.4, 0.4), rr(-1, 1)], l = hypot(...v); return v.map((x) => x / l); })();
+    const c = d.map((x, k) => ctr[k] + x * (far + rr(170, 230)));
+    if (planets.every((p) => hypot(c[0] - p.c[0], c[1] - p.c[1], c[2] - p.c[2]) > p.R + 280)) bc = c;
+  }
+  const bn = (() => { const v = [rr(-0.4, 0.4), 1, rr(-0.4, 0.4)], l = hypot(...v); return v.map((x) => x / l); })();
+  const bh = { c: bc || [ctr[0] + far + 400, ctr[1], ctr[2]], rs: 6, nr: 22, GM: 22000, n: bn, ctr, far };
+  return { seed, sun, planets, neb, nebStyle: rnd() < 0.5 ? 0 : 1, nebSeed: rr(0, 100), bh };
 }
 
 // gravity at (x, y, z): the sum of every planet's pull, falling off with the square of the distance
-function gravity(planets, x, y, z, out) {
+function gravity(planets, x, y, z, out, bh) {
   out[0] = out[1] = out[2] = 0;
+  if (bh) {
+    // the black hole pulls hard up close and not at all beyond ~250 m, so the planets stay upright
+    const dx = bh.c[0] - x, dy = bh.c[1] - y, dz = bh.c[2] - z, d = max(hypot(dx, dy, dz), 2);
+    const a = bh.GM / (d * d) * sstep(250, 140, d) / d;
+    out[0] += dx * a; out[1] += dy * a; out[2] += dz * a;
+  }
   for (const p of planets) {
     const dx = p.c[0] - x, dy = p.c[1] - y, dz = p.c[2] - z, d = max(hypot(dx, dy, dz), p.R * 0.5);
-    const a = p.g * (p.R / d) * (p.R / d) / d;
+    // each planet only holds what is inside its sphere of influence, fading out a little past the atmosphere,
+    // so a heavy neighbour never pulls you off a light planet
+    const ri = p.R + p.hmax + 75;
+    const a = p.g * (p.R / d) * (p.R / d) / d * sstep(ri, ri * 0.72, d);
     out[0] += dx * a; out[1] += dy * a; out[2] += dz * a;
   }
   return out;
