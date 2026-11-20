@@ -184,3 +184,36 @@ function nextFragment(f) {
   s.add(line); diaryAdd(f, line);
   return line;
 }
+
+// thoughts that come when the traveller stays still for a long while: stagnation, not knowing what to do
+const PARADO = [
+  'Estou parado faz tempo. Ou o tempo é que parou comigo?',
+  'Não sei para onde ir. Talvez por isso eu não vá.',
+  'Passei a vida esperando o momento certo. Ele também ficou esperando.',
+  'Se eu não escolher, alguém escolhe por mim. Ou ninguém. Não sei o que é pior.',
+  'Ficar parado também é um caminho. Só que não leva a lugar nenhum.',
+  'Eu conheço esse silêncio. É o mesmo de quando eu não sabia o que fazer da minha vida.',
+  'Deve haver alguma coisa que eu deveria estar fazendo.',
+  'A poeira em volta já começou a me reconhecer.',
+  'Quantas vezes eu fiquei assim, olhando, adiando?',
+  'Ninguém vem me buscar. Acho que nunca vinha.',
+  'Talvez eu esteja com medo de terminar.',
+  'Ou de começar.',
+  'O universo continua girando. Eu, não.',
+  'Tenho a sensação de que esqueci algo importante para fazer. Não lembro o quê.',
+  'Se eu fechar os olhos, será que alguma coisa muda?',
+  'É confortável aqui. Confortável demais.',
+  'Uma vez fiquei anos num lugar só porque sair dava trabalho.',
+  'A luz ainda está lá. Esperando. Como eu.',
+  'Parado, eu não erro. Parado, eu também não vivo.',
+  'Não saber o que fazer também é uma resposta. Só não é a que eu queria.',
+  'Um passo. Qualquer um. Por que é tão difícil?',
+  'Talvez eu só precise de um empurrão. Talvez o empurrão seja eu.',
+];
+const shownParado = new Set();
+function idleThought() {
+  if (shownParado.size >= PARADO.length) shownParado.clear();
+  let l; do l = PARADO[rnd() * PARADO.length | 0]; while (shownParado.has(l));
+  shownParado.add(l); diaryAdd('parado', l);
+  return l;
+}

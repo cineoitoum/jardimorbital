@@ -188,7 +188,7 @@ function buildPlanet(p, D, N, VS, org) {
     pick(8000 / THIN, (k) => around(k, VS * 0.7, (x, y, z, u) => glint(x + u[0] * 0.05, y + u[1] * 0.05, z + u[2] * 0.05, rr(0.015, 0.035), 1.2, 1.1, 1.0, rnd() < 0.04)));
   }
   // the point of light of this planet's feeling: an orb a little above open ground, and a column of light above it
-  let beacon = null;
+  let beacon = null, beaconAt = [0, 0];
   if (p.feel) {
     const bc = VIS_ENV[p.feel].beam;
     for (let tries = 0; tries < 3000 && !beacon; tries++) {
@@ -200,6 +200,7 @@ function buildPlanet(p, D, N, VS, org) {
     if (beacon) {
       const { p: q, u } = beacon, at = (h) => [q[0] + u[0] * h, q[1] + u[1] * h, q[2] + u[2] * h];
       // a square of white light floating low over the ground, tinted by the feeling at its edges
+      beaconAt = [glints.length / 8, 71];
       glints.push(...at(1.9), 0.9, 2.2 + bc[0] * 0.3, 2.2 + bc[1] * 0.3, 2.2 + bc[2] * 0.3, 2.5);
       // a faint column above it, to find it from afar
       for (let k = 0; k < 70; k++) { const h = 3.5 + k * k * 0.05, f = (1 - k / 70) * 0.35; glint(...at(h), 0.25 + k * 0.01, bc[0] * f, bc[1] * f, bc[2] * f, 0); }
@@ -280,7 +281,7 @@ function buildPlanet(p, D, N, VS, org) {
     seated.push({ p: [x, y, z], u: u.slice(0, 3), f: t1, hue: rnd() * 0.4, ph: rnd() });
     n++;
   }
-  return { terrain, col, blades: new Float32Array(blades), glints: new Float32Array(glints), props: new Float32Array(props), seated, smp, Dw, ground, wp, shore, beacon };
+  return { terrain, col, blades: new Float32Array(blades), glints: new Float32Array(glints), props: new Float32Array(props), seated, smp, Dw, ground, wp, shore, beacon, beaconAt };
 }
 
 // small vector helpers

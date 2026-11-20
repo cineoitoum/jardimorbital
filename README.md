@@ -13,15 +13,16 @@ Abra o `index.html` no **Chrome** ou no **Edge** de um computador. É preciso te
 | Olhar | Mouse |
 | Andar, flutuando devagar | `W` `A` `S` `D` |
 | Pular · segurar no ar: planar | `Espaço` |
-| Aura: voar como nave | segure `Shift` + `W` `A` `S` `D` / `Espaço` / `Q` |
-| Cordão de prata | segure o botão direito do mouse, ou `R` |
+| Aura: voar para onde o mouse aponta | segure `Shift`; `W` acelera, `S` freia; ao soltar, você desliza até parar |
+| No ar, mirando um planeta | segure `W`: você segue até ele e pousa |
+| Cordão de prata | `R` ou botão direito: te puxa até a luz mais próxima ainda não vista |
 | Entrar na luz / voltar | `F` (perto de um quadrado de luz) |
 | Respirar (câmera lenta) | segure `B` |
 | Diário · foto · lanterna | `J` · `P` · `L` |
 | Subir / descer no ar | `E` / `Q` |
 | Órbita de cada planeta | `1` `2` `3` |
 | Lanterna | `F` |
-| Menu · som · dados | `Esc` · `M` · `H` |
+| Menu · som · cola de comandos e dados | `Esc` · `M` · `H` |
 
 Cada planeta tem um clima, e o clima decide a música, a luz e a gravidade: **leve** (música clara, gravidade flutuante: um pulo dura uns 10 s), **enigmático** (música estranha, gravidade de Terra) e **sinistro** (música sombria, gravidade pesada). Do enigmático e do sinistro só se sai com a aura. Cada planeta segura o que está na sua esfera de influência; entre eles você deriva, e o "chão" vira suavemente quando você troca de mundo.
 

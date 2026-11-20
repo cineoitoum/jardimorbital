@@ -79,6 +79,10 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 #o { position: absolute; top: .6em; right: .6em; display: none; padding: .3em .6em; background: #170d2ed9; box-shadow: inset 0 0 0 2px #c9b6ff, 0 .3em 1em #0009; font-size: 1.3em; color: #efe9ff; opacity: .8; }
 .g #o { display: flex; }
 .p #o { display: none; }
+#hk { position: absolute; left: 1.2em; bottom: 1em; display: none; padding: .7em 1em; border-radius: .5em; background: #07040f99; font: .72em/1.75 system-ui, sans-serif; color: #e8e0ff; text-shadow: 0 1px 3px #000; pointer-events: none; }
+#hk b { padding: 0 .35em; border-radius: .25em; background: #ffffff22; font-weight: 700; }
+.g #hk.on { display: block; }
+.ph #hk { visibility: hidden; }
 #i { position: absolute; top: 1em; left: 1.2em; margin: 0; font: .8em/1.6 ui-monospace, Consolas, monospace; white-space: pre-wrap; text-shadow: 0 1px 4px #000; pointer-events: none; }
 /* crosshair and the name of the planet you land on */
 #x { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fffa; box-shadow: 0 0 6px #fff8; display: none; pointer-events: none; }
@@ -173,6 +177,7 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 </div>
 <button id=o aria-label=Menu>≡</button>
 <pre id=i></pre>
+<div id=hk><b>WASD</b> andar · no ar, W segue para onde você olha<br><b>Shift</b> aura: voar para onde o mouse aponta · <b>W</b> acelera · <b>S</b> freia<br><b>Espaço</b> pular / planar · <b>E Q</b> subir / descer<br><b>R</b> / botão direito: cordão até a luz mais próxima<br><b>F</b> entrar na luz · <b>B</b> respirar · <b>J</b> diário · <b>P</b> foto · <b>L</b> lanterna<br><b>H</b> esconder esta cola</div>
 <script>
 /*SCRIPT*/
 </script>
