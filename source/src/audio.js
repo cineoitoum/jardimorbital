@@ -37,6 +37,16 @@ function mkSound(ac) {
   for (const f of [27.5, 41.2, 55.1]) { const g = G(0.12, hole); N(OscillatorNode, { frequency: f }, g); N(OscillatorNode, { frequency: f * 1.006 }, g); }
   src(nb, 0.4, BQ('bandpass', 180, 3, G(0.5, hole)));
 
+  // the corridor of light: a bright lydian cluster, shimmering
+  const corr = G(0, out, G(1.4, wet));
+  [261.6, 329.6, 370, 392, 523.3, 659.3, 740, 987.8].forEach((f, i) => { const g = G(0.018, corr); N(OscillatorNode, { frequency: f }, g); N(OscillatorNode, { frequency: f * 1.003 }, g); lfo(0.2 + i * 0.07, 0.012, g.gain); });
+  // the shore: waves on the sand, a warm major pad, a soft choir singing "ah"
+  const shore = G(0, out, G(1, wet));
+  const waves = G(0.5, shore); src(nb, 0.45, BQ('lowpass', 700, 0.5, waves)); lfo(0.09, 0.4, waves.gain); lfo(0.053, 0.25, waves.gain);
+  [130.8, 196, 246.9, 293.7, 329.6].forEach((f) => { const g = G(0.02, BQ('lowpass', 1400, 0.5, shore)); N(OscillatorNode, { type: 'triangle', frequency: f }, g); N(OscillatorNode, { type: 'triangle', frequency: f * 1.004 }, g); });
+  const choir = G(0.5, shore), f1 = BQ('bandpass', 750, 6, choir), f2 = BQ('bandpass', 1150, 8, choir);
+  [261.6, 329.6, 392].forEach((f) => { const o = N(OscillatorNode, { type: 'sawtooth', frequency: f }, G(0.03, f1, f2)); lfo(5 + rnd(), 3, o.frequency); });
+  lfo(0.07, 0.35, choir.gain);
   // ---------------------------------------------------------------- notes
   // a voice made for one note and thrown away; env: attack, decay time constant, level
   const voice = (dest, type, f, t, att, dec, vol, o = {}) => {
@@ -136,7 +146,7 @@ function mkSound(ac) {
   };
   const NOTES = [0, 2, 5, 7, 9, 12, 14, 17, 19];
   const chime = (t) => { const f = 440 * pow(2, NOTES[rnd() * 9 | 0] / 12), p = N(StereoPannerNode, { pan: rr(-0.7, 0.7) }, space, G(1.2, wet)); voice(p, 'sine', f, t, 0.03, 1, 0.03); };
-  let lt = ac.currentTime, tC = lt + 5, lx = pos[0], ly = pos[1], lz = pos[2];
+  let lt = ac.currentTime, tC = lt + 5, tS = lt, lx = pos[0], ly = pos[1], lz = pos[2];
   out.gain.setTargetAtTime(VOL, lt, 1);
   return () => {
     const now = ac.currentTime, t = now + 0.05, dt = now - lt;
@@ -144,18 +154,23 @@ function mkSound(ac) {
     let v = hypot(pos[0] - lx, pos[1] - ly, pos[2] - lz) / dt; if (v > 150) v = 0;
     lt = now; lx = pos[0]; ly = pos[1]; lz = pos[2];
     rush.gain.setTargetAtTime(0.5 * pow(min(v / 60, 1), 1.2) + aura * 0.08, t, 0.3); rushF.frequency.setTargetAtTime(220 + v * 10, t, 0.3);
+    // the end takes over all other music
+    const endF = max(END.corr, END.shore);
+    corr.gain.setTargetAtTime(END.corr * 0.9 + END.glare * 0.4 * (1 - END.shore), t, 1.5);
+    shore.gain.setTargetAtTime(END.shore * 0.9, t, 3);
+    if (END.shore && t > tS) { const f = 523.3 * pow(2, [0, 2, 4, 7, 9, 12][rnd() * 6 | 0] / 12), pp = N(StereoPannerNode, { pan: rr(-0.8, 0.8) }, shore, G(1.5, wet)); voice(pp, 'sine', f, t, 0.02, 2.5, 0.025, { fm: 2, idx: 0.5 }); tS = t + rr(3, 9); }
     // which planet's music: by distance to its surface
     let wmax = 0;
     for (let i = 0; i < songs.length; i++) {
       const p = PL[i], s = songs[i], d = hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]) - p.R;
-      const w = sstep(p.hmax + 150, p.hmax + 30, d) * (1 - bhIn);
+      const w = sstep(p.hmax + 150, p.hmax + 30, d) * (1 - bhIn) * (1 - endF) * (1 - END.glare * 0.6);
       if (w > 0.01 && s.w <= 0.01) s.song.reset(now);
       s.w = w; wmax = max(wmax, w);
       s.bus.gain.setTargetAtTime(w * 0.9, t, 1.2);
       s.lp.frequency.setTargetAtTime(mix(18000, 350, max(bhNear, bhIn)), t, 0.5);
       if (w > 0.01) s.song.tick(now, now + 0.5);
     }
-    space.gain.setTargetAtTime((1 - wmax) * (1 - bhIn) * 1, t, 1.5);
+    space.gain.setTargetAtTime((1 - wmax) * (1 - bhIn) * (1 - endF), t, 1.5);
     hole.gain.setTargetAtTime(max(bhIn, bhNear * 0.6) * 0.9, t, 1);
     if (t > tC && wmax < 0.5 && !bhIn) { chime(t); tC = t + rr(2.5, 9); }
   };

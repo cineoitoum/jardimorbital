@@ -7,7 +7,8 @@
 //   2 escarpa dark brown crags and spires, dark water, cyan mist
 //   3 marmore poured-paint bands of pink, orange and blue, wet sheen
 //   4 jardim  pink and violet flower fields, rock spires, floating rocks, pink haze
-const BIOMES = ['Prado', 'Cristal', 'Escarpa', 'Mármore', 'Jardim'];
+//   5 praia   the end: a psychedelic beach before a great sea (never part of a system)
+const BIOMES = ['Prado', 'Cristal', 'Escarpa', 'Mármore', 'Jardim', 'Praia'];
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 // colours given in sRGB, used linear
 const lin = (h) => hex(h).map((c) => pow(c, 2.2));
@@ -24,6 +25,8 @@ const PALETTES = [
   () => ({ col: ['#1c2a5a', '#2e3f86', '#2b4fb8', '#ff7aa8', '#ffb347', '#ffd27a', '#35c3e0', '#0a1840', '#000000', '#7a5cff', '#3fd0d8', '#000000'], atm: '#3a6dff', dens: 0.007, H: 10, emis: 0 }),
   // jardim
   () => ({ col: ['#4a3f55', '#6a5a70', '#3f5a2a', '#5a7a34', '#8a6a7a', '#ff6ad5', '#6fa8ff', '#1a1a4a', '#2c4a1e', '#ff5fb4', '#000000', '#000000'], atm: '#ff8ad8', dens: 0.016, H: 14, emis: 0 }),
+  // praia: band colours in 2, 3, 4, 9, 10; mushroom caps 5 and 11
+  () => ({ col: ['#5a2a7a', '#8a3a9a', '#ff5fa8', '#ff9a3c', '#ffe08a', '#ff4fd8', '#2ae0d0', '#15206a', '#000000', '#3fd0ff', '#9a5cff', '#7affc8'], atm: '#b88aff', dens: 0.0025, H: 14, emis: 0.25 }),
 ];
 const NEBULAE = [
   ['#5a2a9a', '#1f8a9a', '#c03a8a'],  // violet and teal clouds
@@ -38,7 +41,7 @@ const MOOD_OF_BIOME = [0, 1, 2, 1, 0];
 const SYL = ['ka', 'lu', 'mi', 'ra', 'no', 've', 'si', 'ta', 'or', 'el', 'zu', 'an', 'is', 'ko', 'ne', 'ya', 'th', 'ae'];
 const nameOf = () => { let s = ''; for (let n = 2 + (rnd() * 2 | 0); n--;) s += SYL[rnd() * SYL.length | 0]; return s[0].toUpperCase() + s.slice(1); };
 
-function makeSystem(seed, count = 3) {
+function makeSystem(seed, count = 5) {
   rseed(seed);
   const sun = (() => { const v = [rr(-1, 1), rr(0.2, 1), rr(-1, 1)], l = hypot(...v); return v.map((c) => c / l); })();
   // pick `count` different biomes
@@ -46,7 +49,7 @@ function makeSystem(seed, count = 3) {
   for (let i = order.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [order[i], order[j]] = [order[j], order[i]]; }
   const planets = [], used = new Set();
   for (let i = 0; i < count; i++) {
-    const biome = order[i], pal = PALETTES[biome]();
+    const biome = order[i % order.length], pal = PALETTES[biome]();
     let mood = MOODS[MOOD_OF_BIOME[biome]];
     if (used.has(mood)) mood = MOODS.find((m) => !used.has(m)) || mood;
     used.add(mood);
@@ -84,6 +87,16 @@ function makeSystem(seed, count = 3) {
   const bn = (() => { const v = [rr(-0.4, 0.4), 1, rr(-0.4, 0.4)], l = hypot(...v); return v.map((x) => x / l); })();
   const bh = { c: bc || [ctr[0] + far + 400, ctr[1], ctr[2]], rs: 6, nr: 22, GM: 22000, n: bn, ctr, far };
   return { seed, sun, planets, neb, nebStyle: rnd() < 0.5 ? 0 : 1, nebSeed: rr(0, 100), bh };
+}
+// the place at the end: one big quiet planet far from everything, with a sea over most of it
+function makeShore(sys) {
+  rseed(sys.seed * 7 + 3);
+  const pal = PALETTES[5](), R = 500, A = 13;
+  const c = [sys.bh.ctr[0] + 6000, sys.bh.ctr[1] + 900, sys.bh.ctr[2] - 4000];
+  return {
+    i: 7, biome: 5, name: 'Praia', c, R, A, hmax: A * 1.6 + 5, sea: R + A * 0.15, g: 3, mood: 'leve', seed: rr(0, 200),
+    col: pal.col.map((h) => lin(h)), atm: lin(pal.atm), dens: pal.dens, H: pal.H, emis: pal.emis,
+  };
 }
 
 // gravity at (x, y, z): the sum of every planet's pull, falling off with the square of the distance

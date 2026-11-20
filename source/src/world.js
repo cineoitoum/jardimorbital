@@ -45,6 +45,17 @@ function columnMesh() {
   }
   return m.build();
 }
+// giant mushroom of unit height: a slender stem and a domed cap with a flat underside (gills)
+function mushroomMesh() {
+  const m = new Mesh(), S = 22;
+  const lathe = (prof) => {
+    const rings = prof.map(([r, y]) => Array.from({ length: S }, (_, k) => m.v(cos(k / S * TAU) * r, y, sin(k / S * TAU) * r, 0)));
+    for (let j = 0; j < rings.length - 1; j++) for (let k = 0; k < S; k++) m.quad(rings[j][k], rings[j][(k + 1) % S], rings[j + 1][(k + 1) % S], rings[j + 1][k]);
+  };
+  lathe([[0.09, 0], [0.085, 0.25], [0.072, 0.5], [0.07, 0.65], [0.078, 0.71]]);
+  lathe([[0.075, 0.7], [0.3, 0.7], [0.5, 0.7], [0.62, 0.735], [0.6, 0.82], [0.47, 0.92], [0.24, 0.985], [0.001, 1]]);
+  return m.build();
+}
 function rockMesh() {
   rseed(77);
   const m = icosphere(2, (x, y, z) => { const r = 0.75 + 0.5 * fbm(x * 1.6 + 3, y * 1.6, z * 1.6, 3); return [x * r, y * r * 0.8, z * r]; });
@@ -176,24 +187,82 @@ function buildPlanet(p, D, N, VS, org) {
     // marmore: fine sparkle on the wet paint
     pick(8000 / THIN, (k) => around(k, VS * 0.7, (x, y, z, u) => glint(x + u[0] * 0.05, y + u[1] * 0.05, z + u[2] * 0.05, rr(0.015, 0.035), 1.2, 1.1, 1.0, rnd() < 0.04)));
   }
+  const shore = {};
+  if (b === 5) {
+    // the place to stand: a little above the water, on sand that slopes down to the sea
+    const sand = ground.filter((k) => { const hs = hSea(upAt(k)[3]); return hs > 0.6 && hs < 16; });
+    let best = sand[0], bs = -1;
+    const isSea = (x, y, z) => { const X = x - c[0], Y = y - c[1], Z = z - c[2], l = hypot(X, Y, Z), r = p.sea - 0.4; return Dw(c[0] + X / l * r, c[1] + Y / l * r, c[2] + Z / l * r) < 0; };
+    for (let tries = 0; tries < 300; tries++) {
+      const k = sand[rnd() * sand.length | 0], u = upAt(k), hs = hSea(u[3]);
+      if (hs < 5 || hs > 12) continue;
+      // look all around: the direction with the most open water ahead, and water close by
+      const [t1, t2] = tang(u);
+      for (let j = 0; j < 16; j++) {
+        const a = j / 16 * TAU, f = normalize3([t1[0] * cos(a) + t2[0] * sin(a), t1[1] * cos(a) + t2[1] * sin(a), t1[2] * cos(a) + t2[2] * sin(a)]);
+        let sea = 0, first = 99;
+        for (let d = 6; d <= 180; d += 6) if (isSea(wp[k * 3] + f[0] * d, wp[k * 3 + 1] + f[1] * d, wp[k * 3 + 2] + f[2] * d)) { sea++; if (first > d) first = d; }
+        const sun = p.sun ? 6 * max(0, dot3(f, p.sun)) + 4 * (1 - min(1, abs(dot3(u, p.sun) - 0.25) * 2)) : 0;
+        const sc = sea + (first < 40 ? 8 : 0) + sun + rnd() * 0.5;
+        if (sc > bs) { bs = sc; best = k; shore.f = f; }
+      }
+    }
+    const cu = upAt(best);
+    shore.p = [wp[best * 3] + cu[0] * 1.7, wp[best * 3 + 1] + cu[1] * 1.7, wp[best * 3 + 2] + cu[2] * 1.7]; shore.u = cu.slice(0, 3);
+    const near = (k, r) => hypot(wp[k * 3] - shore.p[0], wp[k * 3 + 1] - shore.p[1], wp[k * 3 + 2] - shore.p[2]) < r;
+    // souls sitting along the waterline, looking at the waves (most of them within sight of the camera)
+    for (let tries = 0; tries < 20000 && seated.length < 38; tries++) {
+      const k = sand[rnd() * sand.length | 0], u = upAt(k), hs = hSea(u[3]);
+      if (hs < 0.4 || hs > 9 || !near(k, seated.length < 26 ? 38 : 140) || near(k, 5)) continue;
+      if (seated.some((q) => hypot(q.p[0] - wp[k * 3], q.p[1] - wp[k * 3 + 1], q.p[2] - wp[k * 3 + 2]) < 3.5)) continue;
+      const n = [wn[k * 3], wn[k * 3 + 1], wn[k * 3 + 2]], f = normalize3([n[0] - u[0] * dot3(n, u) + rr(-0.15, 0.15), n[1] - u[1] * dot3(n, u) + rr(-0.15, 0.15), n[2] - u[2] * dot3(n, u) + rr(-0.15, 0.15)]);
+      seated.push({ p: [wp[k * 3] - u[0] * 0.05, wp[k * 3 + 1] - u[1] * 0.05, wp[k * 3 + 2] - u[2] * 0.05], u: u.slice(0, 3), f, hue: rnd(), ph: rnd() });
+    }
+    // giant mushrooms on the sand and a little inland
+    for (let tries = 0; tries < 20000 && props.length < 36 * 12; tries++) {
+      const k = sand[rnd() * sand.length | 0], u = upAt(k), hs = hSea(u[3]);
+      if (hs < 1.5 || near(k, 22) || !near(k, props.length < 22 * 12 ? 110 : 400) || seated.some((q) => hypot(q.p[0] - wp[k * 3], q.p[1] - wp[k * 3 + 1], q.p[2] - wp[k * 3 + 2]) < 4)) continue;
+      const ax = tilt(u, 0.12), h = 3 + rnd() * rnd() * 12;
+      props.push(wp[k * 3] - u[0] * 0.2, wp[k * 3 + 1] - u[1] * 0.2, wp[k * 3 + 2] - u[2] * 0.2, h, ax[0], ax[1], ax[2], h, rr(0, TAU), rnd(), 2, 0);
+    }
+    // threads of light between neighbouring souls, and from you to the two nearest: loose, sagging a little
+    const th = [], thread = (a, b2) => {
+      const L = hypot(b2[0] - a[0], b2[1] - a[1], b2[2] - a[2]), n = max(8, L * 5 | 0);
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, sg = 4 * t * (1 - t) * (0.25 + L * 0.05), x = mix(a[0], b2[0], t), y = mix(a[1], b2[1], t), z = mix(a[2], b2[2], t), d = normalize3([x - c[0], y - c[1], z - c[2]]);
+        const sp = rnd();
+        th.push(x - d[0] * sg, y - d[1] * sg, z - d[2] * sg, sp > 0.95 ? 0.04 : 0.014, 0.75, 0.8, 1, sp + (sp > 0.985 ? 1 : 0));
+      }
+    };
+    const chest = (q) => [q.p[0] + q.u[0] * 0.75, q.p[1] + q.u[1] * 0.75, q.p[2] + q.u[2] * 0.75];
+    seated.forEach((q, i) => {
+      const nb = seated.map((o, j) => [j, hypot(o.p[0] - q.p[0], o.p[1] - q.p[1], o.p[2] - q.p[2])]).filter(([j, d]) => j > i && d < 16).sort((x, y) => x[1] - y[1]).slice(0, 2);
+      for (const [j] of nb) thread(chest(q), chest(seated[j]));
+    });
+    const me = [shore.p[0] - shore.u[0] * 0.5, shore.p[1] - shore.u[1] * 0.5, shore.p[2] - shore.u[2] * 0.5];
+    seated.map((q) => [q, hypot(q.p[0] - me[0], q.p[1] - me[1], q.p[2] - me[2])]).sort((x, y) => x[1] - y[1]).slice(0, 2).forEach(([q]) => thread(me, chest(q)));
+    shore.threads = new Float32Array(th);
+    // shimmer on the wet sand
+    pick(16000 / THIN, (k) => { const hs = hSea(upAt(k)[3]); if (hs > 6) return; around(k, VS * 0.7, (x, y, z, u) => glint(x + u[0] * 0.05, y + u[1] * 0.05, z + u[2] * 0.05, rr(0.015, 0.04), ...(rnd() < 0.5 ? [1.2, 0.6, 1.1] : [0.5, 1.1, 1.2]), rnd() < 0.05)); });
+  }
   // floating rocks: jardim has many, the others a few
-  const nRocks = b === 4 ? 70 : b === 1 ? 0 : 14;
+  const nRocks = b === 4 ? 70 : b === 1 || b === 5 ? 0 : 14;
   for (let j = 0; j < nRocks; j++) {
     const k = ground[rnd() * ground.length | 0]; if (k === undefined) break;
     const u = upAt(k), h = rr(4, 30), s = rr(0.4, 1) ** 2 * 5 + 0.4;
     props.push(wp[k * 3] + u[0] * h, wp[k * 3 + 1] + u[1] * h, wp[k * 3 + 2] + u[2] * h, 1, u[0], u[1], u[2], s, rr(0, TAU), rnd(), 1, 0);
   }
   // seated spirits: by the water if there is any, else in the low ground
-  for (let tries = 0, n = 0; tries < 4000 && n < 2; tries++) {
+  for (let tries = 0, n = 0; tries < 4000 && n < 2 && b !== 5; tries++) {
     const k = ground[rnd() * ground.length | 0]; if (k === undefined) break;
     const u = upAt(k), hs = hSea(u[3]);
     if (p.sea ? hs > 1.6 : u[3] > p.R - p.A * 0.3) continue;
     if (seated.some((s) => hypot(s.p[0] - wp[k * 3], s.p[1] - wp[k * 3 + 1], s.p[2] - wp[k * 3 + 2]) < 30)) continue;
     const [t1] = tang(u), x = wp[k * 3] - u[0] * 0.05, y = wp[k * 3 + 1] - u[1] * 0.05, z = wp[k * 3 + 2] - u[2] * 0.05;
-    seated.push({ p: [x, y, z], u, f: t1, hue: rnd() * 0.4, ph: rnd() });
+    seated.push({ p: [x, y, z], u: u.slice(0, 3), f: t1, hue: rnd() * 0.4, ph: rnd() });
     n++;
   }
-  return { terrain, col, blades: new Float32Array(blades), glints: new Float32Array(glints), props: new Float32Array(props), seated, smp, Dw, ground, wp };
+  return { terrain, col, blades: new Float32Array(blades), glints: new Float32Array(glints), props: new Float32Array(props), seated, smp, Dw, ground, wp, shore };
 }
 
 // small vector helpers

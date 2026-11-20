@@ -35,7 +35,7 @@ const tex = (w, h, format, usage, samples = 1) => device.createTexture({ size: [
 // ---------------------------------------------------------------- the system
 let SEED = QS.has('seed') ? QS.get('seed') | 0 : (Math.random() * 1e6) | 0;
 $('sd').textContent = SEED;
-const SYS = makeSystem(SEED), PL = SYS.planets, SUN = SYS.sun;
+const SYS = makeSystem(SEED, LV > 1 ? 4 : 5), PL = SYS.planets, SUN = SYS.sun;
 
 // ---------------------------------------------------------------- planet density on the GPU, read back for meshing and collision
 keep('planetasLoad', 1);
@@ -66,7 +66,7 @@ const meshBuf = (m) => ({ vb: buf(new Uint8Array(m.vb), BU.VERTEX), ib: buf(m.ib
 const mFig = meshBuf(FIG), mSeat = meshBuf(SEAT), mCol = meshBuf(COLM), mRock = meshBuf(ROCK), mOcean = meshBuf(OCEAN);
 
 // ---------------------------------------------------------------- uniforms
-const NG = 236, UG = new Float32Array(NG), uboG = device.createBuffer({ size: NG * 4, usage: BU.UNIFORM | BU.COPY_DST });
+const NG = 296, UG = new Float32Array(NG), uboG = device.createBuffer({ size: NG * 4, usage: BU.UNIFORM | BU.COPY_DST });
 const bgl0 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.VERTEX | SS.FRAGMENT, buffer: {} }] });
 const bgl1 = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: SS.VERTEX | SS.FRAGMENT, buffer: {} }] });
 const plScene = device.createPipelineLayout({ bindGroupLayouts: [bgl0, bgl1] });
@@ -106,7 +106,7 @@ for (const p of PL) {
   };
   // props: columns first, then rocks (two meshes, one instance buffer)
   const cols = [], rocks = [];
-  for (let i = 0; i < w.props.length; i += 12) (w.props[i + 10] ? rocks : cols).push(...w.props.subarray(i, i + 12));
+  for (let i = 0; i < w.props.length; i += 12) (w.props[i + 10] === 1 ? rocks : w.props[i + 10] === 0 ? cols : []).push(...w.props.subarray(i, i + 12));
   g.pr = buf(new Float32Array([...cols, ...rocks]), BU.VERTEX); g.prCol = cols.length / 12; g.prRock = rocks.length / 12;
   // seated spirits light the ground around them
   const st = [];
@@ -350,6 +350,7 @@ function ui(show) {
 }
 $('d').onclick = () => ui(false);
 $('o').onclick = () => ui(true);
+$('again').onclick = () => { const u = new URL(location); u.searchParams.set('seed', (Math.random() * 1e6) | 0); location = u; };
 $('ns').onclick = () => { const u = new URL(location); u.searchParams.set('seed', (Math.random() * 1e6) | 0); location = u; };
 document.querySelectorAll('#q button').forEach((b, i) => {
   const lv = 2 - i; if (lv === LV) b.className = 'on';
@@ -384,6 +385,7 @@ function step(dt) {
   B = qnorm(qmul(B, [0, sin(-dyw / 2), 0, cos(-dyw / 2)]));
   pitch = clamp(pitch - dpt, -1.5, 1.5);
   if (trav) return crossing(dt);
+  if (END.stage !== 'play') return endingStep(dt);
   // gravity: turn the body so its feet point down the pull (slowly while in aura: you steer more like a ship)
   gravity(PL, pos[0], pos[1], pos[2], gv, BH);
   const gm = hypot(gv[0], gv[1], gv[2]);
@@ -465,7 +467,125 @@ function step(dt) {
   const dbh = hypot(pos[0] - BH.c[0], pos[1] - BH.c[1], pos[2] - BH.c[2]);
   bhNear = sstep(220, BH.nr, dbh);
   if (dbh < BH.nr) startCrossing();
+  sunWatch(dt, look);
   return cq;
+}
+// ---------------------------------------------------------------- the end: towards the sun, the corridor of light, the shore
+// Walking (or flying) towards the sun, looking at it, slowly fills the view with light. Before the black hole has been
+// crossed it only dazzles a little and fades. After, it keeps growing until a corridor of light opens; at its end
+// there is a beach before a great sea, where the souls sit and watch the waves. The game ends there, and stays.
+const END = { stage: 'play', sunT: 0, glare: 0, corr: 0, shore: 0, t: 0, crossed: false, list: [], k: 0, show: -99, credits: false };
+let SHORE = null, shoreGen = null;
+const creditsEl = $('cr');
+async function genShore() {
+  const p = makeShore(SYS); p.sun = SUN;
+  const d = await density(p);
+  const w = buildPlanet(p, d.D, d.N, d.VS, d.org);
+  const U = new Float32Array(56);
+  U.set([...p.c, p.R, p.sea, p.biome, p.emis, p.seed]);
+  p.col.forEach((cc, k) => U.set([...cc, 0], 8 + k * 4));
+  const st = [], lights = [];
+  rseed(SEED + 4242);
+  for (const q of w.seated) {
+    const lum = rnd() < 0.45, glow = lum ? 2 : rr(0.38, 0.55);
+    st.push(...q.p, 0, ...q.u, 0, ...q.f, q.ph, 1, 1, q.hue, glow);
+    lights.push([q.p[0] + q.u[0] * 0.8, q.p[1] + q.u[1] * 0.8, q.p[2] + q.u[2] * 0.8, lum ? 2.2 : 0.8, mix(1, 0.75, q.hue), mix(0.82, 0.88, q.hue), mix(0.5, 1, q.hue), 14]);
+  }
+  // a few souls drifting low over the water
+  const fl = [];
+  for (let k = 0; k < 9; k++) fl.push(orbitSpirit(p.c, p.sea + rr(2, 7), rr(0.6, 1.3), rr(1, 1.7), 0, rnd(), rnd() < 0.6 ? rr(0.35, 0.55) : rr(0.9, 1.2)));
+  const flA = new Float32Array(fl.flat());
+  const ocean = meshBuf(icosphere(6).build());
+  SHORE = {
+    p, w, lights, flA, nfl: fl.length, ocean,
+    bg: device.createBindGroup({ layout: bgl1, entries: [{ binding: 0, resource: { buffer: buf(U, BU.UNIFORM) } }] }),
+    tv: buf(new Uint8Array(w.terrain.vb), BU.VERTEX), ti: buf(w.terrain.ib, BU.INDEX), tn: w.terrain.n,
+    gl: buf(w.glints, BU.VERTEX), gn: w.glints.length / 8,
+    pr: buf(w.props, BU.VERTEX), pn: w.props.length / 12,
+    st: buf(new Float32Array(st), BU.VERTEX), sn: st.length / 16,
+    fl: buf(flA, BU.VERTEX),
+    th: buf(w.shore.threads, BU.VERTEX), tnn: w.shore.threads.length / 8,
+    cam: w.shore,
+  };
+  const f = w.shore.f, u = w.shore.u;
+  SHORE.eye = normalize3([f[0] * 0.93 + u[0] * 0.36, f[1] * 0.93 + u[1] * 0.36, f[2] * 0.93 + u[2] * 0.36]);
+  // every soul on the beach, as speakers
+  SHORE.voices = w.seated.map((q) => [q.p[0] + q.u[0] * 1.1, q.p[1] + q.u[1] * 1.1, q.p[2] + q.u[2] * 1.1]);
+}
+const mMush = meshBuf(mushroomMesh());
+function startCorridor() {
+  END.stage = 'corridor'; END.t = 0; END.k = 0; END.show = -99;
+  END.list = peaceThoughts(5);
+  cord.on = false; aura = 0; kf = kb = kl = kr = ku = kd = ks = kj = 0;
+  if (!shoreGen) shoreGen = genShore();
+}
+function enterShore() {
+  END.stage = 'shore'; END.t = 0; END.corr = 0;
+  const c = SHORE.cam;
+  for (let k = 0; k < 3; k++) { pos[k] = c.p[k]; vel[k] = 0; }
+  // upright on the sand, facing the sea
+  B = qFromY(c.u[0], c.u[1], c.u[2]);
+  const f = qrot(B, [0, 0, -1]), yaw = atan2(dot3(cross3(f, c.f), c.u), dot3(f, c.f));
+  B = qnorm(qmul(B, [0, sin(yaw / 2), 0, cos(yaw / 2)])); pitch = -0.14;
+  thoughtEl.className = '';
+}
+// each frame of the ending: only the eyes move
+function endingStep(dt) {
+  END.t += dt;
+  const cq = qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]);
+  if (END.stage === 'corridor') {
+    const D = 34, t = END.t;
+    END.corr = sstep(0.5, 3, t);
+    END.glare = max(sstep(3, 0.5, t), sstep(D - 3, D, t));
+    // good thoughts, far apart
+    const at = [5, 11, 17, 23, 28.5];
+    if (END.k < END.list.length && t > at[END.k]) { thoughtEl.textContent = END.list[END.k++]; thoughtEl.className = 'on'; END.show = t; speakSound('thought'); }
+    if (t - END.show > 4.8) thoughtEl.className = '';
+    if (t >= D && SHORE) enterShore();
+  } else {
+    END.shore = 1;
+    END.glare = sstep(5, 0, END.t);
+    if (END.t > 40 && !END.credits) { END.credits = true; creditsEl.className = 'on'; }
+    chorus(dt);
+  }
+  return cq;
+}
+// at the shore the souls around speak, several at once, short words of peace in many languages
+const CHORUS = Array.from({ length: 7 }, () => { const e = document.createElement('div'); e.className = 'tk'; document.body.appendChild(e); return { e, at: null, t: 99, dur: 0 }; });
+let chorusNext = 3, chorusSaid = new Set();
+function chorus(dt) {
+  if (END.t < 6) return;
+  const cq = qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), look = qrot(cq, [0, 0, -1]);
+  if ((chorusNext -= dt) <= 0) {
+    chorusNext = rr(0.8, 2.6);
+    const free = CHORUS.find((c) => c.t > c.dur);
+    // a soul in view that is not already speaking
+    const vis = SHORE.voices.filter((v) => { const d = [v[0] - pos[0], v[1] - pos[1], v[2] - pos[2]], l = hypot(...d); return l < 90 && dot3(d, look) / l > 0.55 && !CHORUS.some((c) => c.t < c.dur && c.at === v); });
+    if (free && vis.length) {
+      let line; for (let k = 0; k < 6; k++) { line = PAZ_MUNDO[rnd() * PAZ_MUNDO.length | 0]; if (!chorusSaid.has(line)) break; }
+      chorusSaid.add(line); if (chorusSaid.size > PAZ_MUNDO.length * 0.7) chorusSaid.clear();
+      free.at = vis[rnd() * vis.length | 0]; free.t = 0; free.dur = rr(4.5, 7); free.e.textContent = line;
+    }
+  }
+  const m = lastVP;
+  for (const c of CHORUS) {
+    c.t += dt;
+    if (!c.at || c.t > c.dur) { c.e.className = 'tk'; continue; }
+    const [x, y, z] = c.at, cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+    if (cw < 0.1) { c.e.className = 'tk'; continue; }
+    const sx = ((m[0] * x + m[4] * y + m[8] * z + m[12]) / cw * 0.5 + 0.5) * innerWidth, sy = (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw * 0.5) * innerHeight;
+    c.e.style.left = sx + 'px'; c.e.style.top = (sy - c.t * 6) + 'px';
+    c.e.style.fontSize = clamp(40 / cw, 0.7, 1.4) + 'em';
+    c.e.className = c.t < c.dur - 1.5 ? 'tk on' : 'tk';
+  }
+}
+function sunWatch(dt, look) {
+  const vm = hypot(vel[0], vel[1], vel[2]);
+  const toward = dot3(look, SUN) > 0.93 && vm > 1.5 && (vel[0] * look[0] + vel[1] * look[1] + vel[2] * look[2]) / vm > 0.6;
+  END.sunT = toward ? END.sunT + dt : max(0, END.sunT - 2 * dt);
+  if (!END.crossed) END.sunT = min(END.sunT, 6);
+  END.glare = sstep(2, 11, END.sunT) * (END.crossed ? 1 : 0.35 / sstep(2, 11, 6));
+  if (END.crossed && END.sunT >= 12) startCorridor();
 }
 // ---------------------------------------------------------------- crossing the black hole
 const thoughtEl = $('th');
@@ -493,7 +613,7 @@ function crossing(dt) {
     thoughtEl.className = '';
     const c = BH.ctr, d = normalize3([c[0] - BH.c[0], c[1] - BH.c[1], c[2] - BH.c[2]]);
     for (let k = 0; k < 3; k++) { pos[k] = c[k] + d[k] * (BH.far + 70); vel[k] = -d[k] * 16; }
-    trav = null; bhIn = 0; flash = 1; groundT = 0;
+    trav = null; bhIn = 0; flash = 1; groundT = 0; END.crossed = true;
   }
   return qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]);
 }
@@ -540,8 +660,8 @@ function uniforms(cq) {
   const f = 1 / Math.tan(fovNow / 2), asp = W / H, P = new Float64Array(16);
   P[0] = f / asp; P[5] = f; P[11] = -1; P[14] = NEAR;
   // the light follows the mood of the planet you are near
-  let et = 1;
-  for (const p of PL) { const w = sstep(p.hmax + 160, p.hmax + 30, hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]) - p.R); et = mix(et, MOOD_EXPO[p.mood], w); }
+  let et = END.stage === 'shore' ? 0.85 : 1;
+  if (END.stage !== 'shore') for (const p of PL) { const w = sstep(p.hmax + 160, p.hmax + 30, hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]) - p.R); et = mix(et, MOOD_EXPO[p.mood], w); }
   expo += (et - expo) * 0.02;
   const vp = mmul(P, V), ivp = minv(vp);
   UG.set(vp, 0); UG.set(ivp, 16);
@@ -551,33 +671,42 @@ function uniforms(cq) {
   UG.set([1 / f, asp, NEAR, 2 / (f * H)], 44);
   UG.set([...r, expo], 48);
   UG.set([...u, LV > 1 ? 0.03 : 0.045], 52);
-  UG.set([-b[0], -b[1], -b[2], PL.length], 56);
+  const VIS = END.stage === 'shore' ? [SHORE.p] : PL;
+  UG.set([-b[0], -b[1], -b[2], VIS.length], 56);
   UG.set([...SYS.neb[0], SYS.nebSeed], 60);
   UG.set([...SYS.neb[1], 0.55], 64);
   // sun on screen
   const cx = vp[0] * SUN[0] + vp[4] * SUN[1] + vp[8] * SUN[2], cy = vp[1] * SUN[0] + vp[5] * SUN[1] + vp[9] * SUN[2], cw = vp[3] * SUN[0] + vp[7] * SUN[1] + vp[11] * SUN[2];
   UG.set([(cx / cw * 0.5 + 0.5) * W, (0.5 - cy / cw * 0.5) * H, cw > 0 ? 1 : 0, SYS.nebStyle], 72);
-  PL.forEach((p, i) => UG.set([...p.c, p.R, ...p.atm, p.R + p.hmax + p.H * 4, p.dens, p.H, p.sea, 0], 76 + i * 12));
+  VIS.forEach((p, i) => UG.set([...p.c, p.R, ...p.atm, p.R + p.hmax + p.H * 4, p.dens, p.H, p.sea, 0], 76 + i * 12));
   // lights: the lamp, then the nearest spirits
   const L = [];
   if (lamp) { const lf = qrot(cq, [0, 0, -1]); L.push([pos[0] + lf[0] * 0.5, pos[1] + lf[1] * 0.5, pos[2] + lf[2] * 0.5, 1.6, 1, 0.92, 0.8, 30, 0]); }
   // the aura lights the ground you skim over
   if (aura > 0.05) L.push([pos[0] - u[0] * 0.5, pos[1] - u[1] * 0.5, pos[2] - u[2] * 0.5, 2.5 * aura, 0.6, 0.7, 1.3, 26, 0]);
-  const cand = lightsStatic.map((l) => [...l, hypot(l[0] - pos[0], l[1] - pos[1], l[2] - pos[2])]);
-  for (let i = 0; i < nSpirit; i++) {
-    const o = i * 16; if (spiritArr[o + 13] > 1.5) continue;
-    orbitAt(spiritArr, o, time, tmp3);
-    const hue = spiritArr[o + 14], sc = spiritArr[o + 12];
-    cand.push([...tmp3, 1.4 * spiritArr[o + 15] * min(sc, 2.5), mix(1, 0.75, hue), mix(0.82, 0.88, hue), mix(0.5, 1, hue), 14 * min(sc, 2.5), hypot(tmp3[0] - pos[0], tmp3[1] - pos[1], tmp3[2] - pos[2])]);
+  const shoreNow = END.stage === 'shore';
+  const cand = (shoreNow ? SHORE.lights : lightsStatic).map((l) => [...l, hypot(l[0] - pos[0], l[1] - pos[1], l[2] - pos[2])]);
+  const SA = shoreNow ? SHORE.flA : spiritArr, NS = shoreNow ? SHORE.nfl : nSpirit;
+  for (let i = 0; i < NS; i++) {
+    const o = i * 16; if (SA[o + 13] > 1.5) continue;
+    orbitAt(SA, o, time, tmp3);
+    const hue = SA[o + 14], sc = SA[o + 12];
+    cand.push([...tmp3, 1.4 * SA[o + 15] * min(sc, 2.5), mix(1, 0.75, hue), mix(0.82, 0.88, hue), mix(0.5, 1, hue), 14 * min(sc, 2.5), hypot(tmp3[0] - pos[0], tmp3[1] - pos[1], tmp3[2] - pos[2])]);
   }
   cand.sort((a, b2) => a[8] - b2[8]);
   for (const c of cand) { if (L.length >= 12) break; L.push(c); }
-  L.forEach((l, i) => UG.set([l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7]], 124 + i * 8));
+  L.forEach((l, i) => UG.set([l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7]], 172 + i * 8));
   UG.set([...SYS.neb[2], L.length], 68);
-  UG.set([vel[0], vel[1], vel[2], aura], 220);
-  UG.set([spd, shake, bhIn, flash], 224);
-  UG.set([...BH.c, BH.rs], 228);
-  UG.set([...BH.n, bhIn > 0.5 ? 0 : 1], 232);
+  UG.set([vel[0], vel[1], vel[2], aura], 268);
+  UG.set([spd, shake, bhIn, flash], 272);
+  UG.set([...BH.c, BH.rs], 276);
+  UG.set([...BH.n, bhIn > 0.5 || END.stage === 'shore' ? 0 : 1], 280);
+  UG.set([END.glare, END.corr, END.shore, END.t], 284);
+  if (SHORE) {
+    // a slow blink every ~25 s
+    const bt = (time % 25) / 25, blink = bt > 0.96 ? sin((bt - 0.96) / 0.04 * PI) : 0;
+    UG.set([...SHORE.eye, 0.2], 288); UG.set([...SHORE.cam.u, blink], 292);
+  }
   lastVP = vp;
   Q.writeBuffer(uboG, 0, UG);
 }
@@ -607,6 +736,7 @@ function render() {
     : { view: T.scene.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] };
   const r = e.beginRenderPass({ colorAttachments: [ca], depthStencilAttachment: { view: T.depth.createView(), depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'store' } });
   r.setBindGroup(0, bg0);
+  if (END.stage === 'shore') { renderShore(r); r.end(); post(e); return; }
   r.setBindGroup(1, PD[0].bg); if (!SKIP.includes('sky')) { r.setPipeline(pSky); r.draw(3); }
   PL.forEach((p, i) => {
     const g = PD[i]; r.setBindGroup(1, g.bg);
@@ -633,6 +763,24 @@ function render() {
   r.setPipeline(pDust); r.setVertexBuffer(0, bDust); r.draw(4, nDust);
   }
   r.end();
+  post(e);
+}
+function renderShore(r) {
+  const S = SHORE;
+  r.setBindGroup(1, S.bg);
+  r.setPipeline(pSky); r.draw(3);
+  r.setPipeline(pTerr); r.setVertexBuffer(0, S.tv); r.setIndexBuffer(S.ti, 'uint32'); r.drawIndexed(S.tn);
+  if (S.pn) { r.setPipeline(pProp); r.setVertexBuffer(0, mMush.vb); r.setVertexBuffer(1, S.pr); r.setIndexBuffer(mMush.ib, 'uint32'); r.drawIndexed(mMush.n, S.pn); }
+  r.setPipeline(pSpirit); r.setVertexBuffer(0, mSeat.vb); r.setVertexBuffer(1, S.st); r.setIndexBuffer(mSeat.ib, 'uint32'); r.drawIndexed(mSeat.n, S.sn);
+  r.setVertexBuffer(0, mFig.vb); r.setVertexBuffer(1, S.fl); r.setIndexBuffer(mFig.ib, 'uint32'); r.drawIndexed(mFig.n, S.nfl);
+  r.setPipeline(pOcean); r.setVertexBuffer(0, S.ocean.vb); r.setIndexBuffer(S.ocean.ib, 'uint32'); r.drawIndexed(S.ocean.n);
+  r.setPipeline(pSpiritT); r.setVertexBuffer(0, mSeat.vb); r.setVertexBuffer(1, S.st); r.setIndexBuffer(mSeat.ib, 'uint32'); r.drawIndexed(mSeat.n, S.sn);
+  r.setVertexBuffer(0, mFig.vb); r.setVertexBuffer(1, S.fl); r.setIndexBuffer(mFig.ib, 'uint32'); r.drawIndexed(mFig.n, S.nfl);
+  if (S.gn) { r.setPipeline(pGlint); r.setVertexBuffer(0, S.gl); r.draw(4, S.gn); }
+  r.setPipeline(pCord); r.setVertexBuffer(0, S.th); r.draw(4, S.tnn);
+  r.setPipeline(pDust); r.setVertexBuffer(0, bDust); r.draw(4, nDust);
+}
+function post(e) {
   // atmosphere and haze
   let p2 = e.beginRenderPass({ colorAttachments: [{ view: T.comp.createView(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] });
   if (!SKIP.includes('atmpass')) { p2.setPipeline(pAtm); p2.setBindGroup(0, T.atmBG); p2.draw(3); } p2.end();
@@ -658,7 +806,7 @@ const label = $('n');
 const talkEl = $('t'), tmpS = [0, 0, 0];
 let talk = null, lastTalk = -99;
 function talkUpdate(dt) {
-  if (trav) { if (talk) { talkEl.className = ''; talk = null; } return; }
+  if (trav || END.stage !== 'play') { if (talk) { talkEl.className = ''; talk = null; } return; }
   const look = qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1]);
   if (!talk && time - lastTalk > 3) {
     let best = null, bd = 1e9;
@@ -766,5 +914,5 @@ function lookFrom(from, to) {
   const yaw = atan2(dot3(cross3(f, h), up), dot3(f, h));
   B = qnorm(qmul(B, [0, sin(yaw / 2), 0, cos(yaw / 2)])); pitch = Math.asin(clamp(dot3(dir, up), -1, 1)); groundT = 0;
 }
-window.__game = { proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
+window.__game = { shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
 requestAnimationFrame(frame);

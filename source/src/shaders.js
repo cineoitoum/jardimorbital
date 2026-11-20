@@ -39,10 +39,13 @@ fn dens(p: vec3f) -> f32 {
   let warp = vec3f(fbm(wq, 3), fbm(wq + 5.1, 3), fbm(wq + 9.3, 3)) - .5;
   let q = p + warp * 22.;
   var h = 0.;
-  if (b < .5 || b > 3.5) {
+  if (b > 4.5) {
+    // praia: low swells and long gentle beaches, most of it under the sea
+    h = (fbm(q * .008 + s, 3) - .5) * A * 2.6 + (fbm(q * .03 + s, 2) - .5) * A * .35;
+  } else if (b < .5 || b > 3.5) {
     // rolling hills (prado / jardim)
     h = (fbm(q * .011 + s, 4) - .5) * A * 2.2 + (fbm(q * .045 + s, 3) - .5) * A * .4;
-    if (b > 3.5) {
+    if (b > 3.5 && b < 4.5) {
       // a few tall rock spires standing out of the meadows
       let w = wor(q * .03 + s + 2.);
       h += ss(.28, .0, w) * A * 2.6 * ss(.5, .68, fbm(q * .012 + s + 7., 2));
@@ -92,12 +95,15 @@ struct G {
   nebB: vec4f,  // colour, strength
   nebC: vec4f,  // colour, light count
   sunS: vec4f,  // sun on screen: px x, px y, in front, nebula style
-  pl: array<vec4f, 12>,  // per planet: centre+R | atmosphere colour+top | density, scale height, sea radius, _
+  pl: array<vec4f, 24>,  // per planet (up to 8): centre+R | atmosphere colour+top | density, scale height, sea radius, _
   li: array<vec4f, 24>,  // per light: position+intensity | colour+radius
   vel: vec4f,   // player velocity, aura 0..1
   fx: vec4f,    // speed, shake, inside the black hole 0..1, white flash
   bh: vec4f,    // black hole centre, visual radius
   bh2: vec4f,   // accretion disk normal, visible
+  fx2: vec4f,   // the end: sun glare 0..1, corridor of light 0..1, at the shore 0..1, corridor time
+  eye: vec4f,   // the great eye in the clouds: direction, angular radius of the iris
+  eye2: vec4f,  // its up direction, blink 0..1
 };
 `;
 // sky functions: need W_NOISE and the uniform `g`
@@ -138,10 +144,46 @@ fn stars(d: vec3f) -> vec3f {
   }
   return c;
 }
+// the great eye, half sunk in clouds; returns colour and coverage
+fn greatEye(d: vec3f) -> vec4f {
+  let E = g.eye.xyz;
+  if (dot(d, E) < .55) { return vec4f(0.); }
+  let X = normalize(cross(g.eye2.xyz, E)); let Y = cross(E, X);
+  let t = g.cam.w;
+  let p = vec2f(dot(d, X), dot(d, Y)) / g.eye.w;
+  let r = length(p);
+  // the gaze wanders a little
+  let q = p - vec2f(sin(t * .07) * .09, sin(t * .05 + 1.) * .06);
+  let rq = length(q); let ang = atan2(q.y, q.x);
+  let fib = .5 + .5 * sin(ang * 70. + fbm(vec3f(cos(ang) * 5., sin(ang) * 5., rq * 4.), 3) * 7.);
+  var col = mix(vec3f(.05, .16, .32), vec3f(.3, .58, .85), fib * ss(1., .45, rq));
+  col = mix(col, vec3f(.78, .55, .25), ss(.62, .4, rq) * (.5 + .5 * fib));
+  col *= .55 + .45 * ss(1., .85, rq);
+  let pupil = .36 + .03 * sin(t * .25);
+  col = mix(col, vec3f(.01, .012, .02), ss(pupil + .02, pupil - .01, rq));
+  let hl = length(q - vec2f(-.3, .36));
+  col += vec3f(1.) * ss(.11, .05, hl) * 1.6;
+  // white of the eye, then clouds all around and over the edges
+  col = mix(col, vec3f(.86, .87, .9), ss(.98, 1.03, rq));
+  let cl = fbm(vec3f(p * 1.6, t * .01), 5);
+  let edge = r + (cl - .5) * .9;
+  // a slow blink: cloud lids close from above and below
+  let lid = g.eye2.w;
+  let lidM = ss(1. - lid, 1. - lid + .15, abs(p.y) / 1.2 + (cl - .5) * .3);
+  let cover = max(ss(1.05, 1.3, edge), lidM);
+  let bill = fbm(vec3f(p * 4.2, 3.), 4);
+  let lit = .6 + .5 * ss(.3, .75, bill) + .25 * dot(normalize(p + 1e-3), vec2f(.5, .6));
+  let cloud = mix(vec3f(.62, .66, .78), vec3f(1.15, 1.08, 1.), lit) * mix(1., .9, ss(1.3, 2.4, r));
+  col = mix(col, cloud * 1.3 + vec3f(.25, .17, .05) * ss(.6, .9, bill), cover);
+  let a = ss(2.7, 2.0, edge);
+  return vec4f(col * 1.4, a);
+}
 fn sky(d: vec3f) -> vec3f {
   var c = nebula(d) + stars(d);
+  if (g.fx2.z > .5) { let e = greatEye(d); c = mix(c, e.rgb, e.a); }
   let sd = max(dot(d, g.sun.xyz), 0.);
-  c += vec3f(1., .92, .82) * (ss(.99985, .99993, sd) * 80. + pow(sd, 900.) * 6. + pow(sd, 60.) * .12) * g.sun.w;
+  let gl = g.fx2.x;
+  c += vec3f(1., .92, .82) * (ss(.99985 - gl * .004, .99993 - gl * .003, sd) * 80. + pow(sd, 900. - gl * 820.) * (6. + gl * 30.) + pow(sd, 60. - gl * 45.) * (.12 + gl * 2.)) * g.sun.w;
   return c;
 }
 `;
@@ -201,7 +243,7 @@ struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n
 }
 fn bands(w: vec3f) -> vec3f {
   // marmore: flowing bands of colour, like poured paint
-  let q = w * .018 + pu.p.w;
+  let q = w * select(.018, .04, pu.p.y > 4.5) + pu.p.w + select(0., g.cam.w * .004, pu.p.y > 4.5);
   let wp = vec3f(fbm(q, 3), fbm(q + 4.3, 3), fbm(q + 8.1, 3));
   let t = fbm(q * 1.7 + wp * 2.8, 4) * 6. + fbm(w * .07 + wp * 3., 3) * 3.;
   let f = fract(t); let k = i32(floor(t)) % 5;
@@ -226,7 +268,7 @@ fn bands(w: vec3f) -> vec3f {
   let strata = sin(rr * 1.7 + n1 * 6.) * .5 + .5;
   let rock = mix(pu.col[0].rgb, pu.col[1].rgb, sat(n2 * .7 + strata * .5));
   var ground = mix(pu.col[2].rgb, pu.col[3].rgb, ss(.35, .65, n1));
-  if (b > 2.5 && b < 3.5) { ground = bands(v.w); }
+  if ((b > 2.5 && b < 3.5) || b > 4.5) { ground = bands(v.w); }
   let gm = ss(.62, .82, slope + (n1 - .5) * .25);
   var base = mix(rock, ground, gm);
   // low land: valley paths (cristal), beaches by the sea
@@ -238,7 +280,12 @@ fn bands(w: vec3f) -> vec3f {
   let sp = pow(vn(v.w * 5.3), 22.) * 30. * pu.p.z * (.4 + .6 * gm) * ss(.45, .6, n1);
   let L = g.sun.w * sunLight(N, up);
   var col = base * (vec3f(1., .95, .88) * L + ambient(N, up) + lights(v.w, N)) + pu.col[5].rgb * sp;
-  if (b > 2.5 && b < 3.5) {
+  if (b > 4.5 && pu.p.x > 0.) {
+    // foam lines running up the beach with the waves
+    let fm = pow(.5 + .5 * sin(hs * 5. - g.cam.w * 1.3 + fbm(v.w * .15, 2) * 4.), 10.) * ss(1.4, .1, hs) * ss(-.4, .05, hs);
+    col += vec3f(1., .97, 1.) * fm * (.4 + L * .6) * 1.5;
+  }
+  if ((b > 2.5 && b < 3.5) || b > 4.5) {
     // wet sheen on the marble
     let V = normalize(g.cam.xyz - v.w);
     let H = normalize(V + g.sun.xyz);
@@ -251,8 +298,13 @@ fn bands(w: vec3f) -> vec3f {
 // ---------------------------------------------------------------- ocean (unit icosphere scaled to the sea level)
 const W_OCEAN = S_SCENE + /*wgsl*/`
 struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f };
+fn waveH(w: vec3f) -> f32 {
+  let t = g.cam.w;
+  return .55 * sin(dot(w, vec3f(.21, .05, .13)) - t * 1.1) + .3 * sin(dot(w, vec3f(-.09, .17, .31)) - t * 1.6) + .12 * sin(dot(w, vec3f(.6, -.4, .45)) - t * 2.3);
+}
 @vertex fn vs(@location(0) p: vec3f, @location(1) n: vec4f) -> VO {
-  let w = pu.c.xyz + p * pu.p.x;
+  var w = pu.c.xyz + p * pu.p.x;
+  if (pu.p.y > 4.5) { w += p * waveH(w); }
   return VO(g.vp * vec4f(w, 1.), w);
 }
 @fragment fn fs(v: VO, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
@@ -260,6 +312,12 @@ struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f };
   let t = g.cam.w;
   let a = v.w * .22 + vec3f(t * .25, t * .1, -t * .2);
   var N = up + (vec3f(vn(a), vn(a + 3.1), vn(a + 7.7)) - .5) * .18 + (vec3f(vn(a * 3.1), vn(a * 3.1 + 5.), vn(a * 3.1 + 9.)) - .5) * .06;
+  if (pu.p.y > 4.5) {
+    // slope of the swell, from finite differences across the surface
+    let e = .4; let h0 = waveH(v.w);
+    let gx = vec3f(waveH(v.w + vec3f(e, 0., 0.)) - h0, waveH(v.w + vec3f(0., e, 0.)) - h0, waveH(v.w + vec3f(0., 0., e)) - h0) / e;
+    N = normalize(N - (gx - up * dot(gx, up)) * 1.2);
+  }
   N = normalize(N - up * dot(N, up) * .0);
   let V = normalize(g.cam.xyz - v.w);
   if (!ff) { N = -N; }
@@ -314,16 +372,24 @@ struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n
 
 // ---------------------------------------------------------------- crystal columns and floating rocks (instanced meshes)
 const W_PROP = S_SCENE + /*wgsl*/`
-struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n: vec3f, @location(2) l: vec3f, @location(3) s: vec4f };
+struct VO { @builtin(position) pos: vec4f, @location(0) w: vec3f, @location(1) n: vec3f, @location(2) l: vec3f, @location(3) s: vec4f, @location(4) ln: vec3f };
 fn basis(ax: vec3f, yaw: f32) -> mat3x3f {
   let r = select(vec3f(1., 0., 0.), vec3f(0., 0., 1.), abs(ax.x) > .8);
   let X0 = normalize(cross(ax, r)); let Z0 = cross(X0, ax);
   let X = X0 * cos(yaw) + Z0 * sin(yaw); let Z = cross(X, ax);
   return mat3x3f(X, ax, Z);
 }
-// a: base + height, b: axis + radius, c: yaw, seed, kind (0 crystal, 1 rock), _
+// a: base + height, b: axis + radius, c: yaw, seed, kind (0 crystal, 1 rock, 2 mushroom), _
 @vertex fn vs(@location(0) p: vec3f, @location(1) n: vec4f, @location(2) a: vec4f, @location(3) b: vec4f, @location(4) c: vec4f) -> VO {
   var ax = b.xyz; var base = a.xyz;
+  if (c.z > 1.5) {
+    // giant mushroom: breathes slowly, the cap a little more than the stem
+    let M = basis(ax, c.x);
+    let br = 1. + sin(g.cam.w * .45 + c.y * 9.) * .04 * (.3 + p.y);
+    let lp = vec3f(p.x * br, p.y, p.z * br) * b.w;
+    let w = base + M * lp;
+    return VO(g.vp * vec4f(w, 1.), w, M * n.xyz, p, vec4f(a.w, b.w, c.y, c.z), n.xyz);
+  }
   if (c.z > .5) {
     // floating rock: bobs and turns slowly over the ground
     let t = g.cam.w;
@@ -336,12 +402,29 @@ fn basis(ax: vec3f, yaw: f32) -> mat3x3f {
   // pointed tip of the crystal
   lp.y += n.w * b.w * .45 * step(c.z, .5);
   let w = base + M * lp;
-  return VO(g.vp * vec4f(w, 1.), w, M * n.xyz, vec3f(p.x, p.y, p.z), vec4f(a.w, b.w, c.y, c.z));
+  return VO(g.vp * vec4f(w, 1.), w, M * n.xyz, vec3f(p.x, p.y, p.z), vec4f(a.w, b.w, c.y, c.z), n.xyz);
 }
 @fragment fn fs(v: VO, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   let up = normalize(v.w - pu.c.xyz);
   var N = normalize(v.n);
   let V = normalize(g.cam.xyz - v.w);
+  if (v.s.w > 1.5) {
+    // mushroom: glowing cap in drifting rings, light pouring from the gills underneath, a pale stem
+    let L = g.sun.w * sunLight(N, up);
+    let cap = ss(.66, .74, v.l.y);
+    let rr = length(v.l.xz);
+    let ring = fract(rr * 3.2 - g.cam.w * .12 + v.s.z * 7.);
+    var cc = mix(pu.col[5].rgb, pu.col[11].rgb, ss(.2, .5, ring) * ss(.95, .6, ring));
+    cc = mix(cc, pu.col[9].rgb, ss(.55, .9, sin(atan2(v.l.z, v.l.x) * 3. + v.s.z * 20. + g.cam.w * .2) * .5 + .5) * .5);
+    let spots = ss(.62, .7, vn(v.l * 7. + v.s.z * 30.));
+    let under = ss(.1, -.4, v.ln.y);
+    let gills = pow(.5 + .5 * sin(atan2(v.l.z, v.l.x) * 60.), 3.) * under;
+    let fr = pow(1. - abs(dot(N, V)), 2.);
+    var col = cc * (.2 + L * .45) + cc * (.45 + fr * .8) * (.6 + .4 * sin(g.cam.w * .7 + v.s.z * 5.)) + vec3f(1., .95, 1.) * spots * .35;
+    col += pu.col[11].rgb * gills * 1.6;
+    let stem = pu.col[4].rgb * (.2 + L * .5 + fr * .5) + pu.col[11].rgb * (.06 + .25 * ss(.4, .7, v.l.y));
+    return vec4f(mix(stem, col, cap) + lights(v.w, N) * .4, 1.);
+  }
   if (v.s.w > .5) {
     let L = g.sun.w * sunLight(N, up);
     let rk = mix(pu.col[0].rgb, pu.col[1].rgb, vn(v.l * 3. + v.s.z * 9.)) * (.7 + .3 * fbm(v.w * .4, 2));
@@ -666,16 +749,43 @@ fn kar(c: vec3f) -> vec4f { let w = 1. / (1. + max(c.r, max(c.g, c.b))); return 
 `;
 
 // ---------------------------------------------------------------- final: bloom, sun spikes, tone map, film grain
-const W_POST = S_G + W_FS + /*wgsl*/`
+const W_POST = S_G + W_NOISE + W_FS + /*wgsl*/`
 @group(0) @binding(0) var<uniform> g: G;
 @group(0) @binding(1) var sC: sampler;
 @group(0) @binding(2) var tS: texture_2d<f32>;
 @group(0) @binding(3) var tB: texture_2d<f32>;
 @group(0) @binding(4) var tD: texture_depth${AA > 1 ? '_multisampled' : ''}_2d;
-fn ss(a: f32, b: f32, x: f32) -> f32 { let t = clamp((x - a) / (b - a), 0., 1.); return t * t * (3. - 2. * t); }
 fn sat3(x: vec3f) -> vec3f { return clamp(x, vec3f(0.), vec3f(1.)); }
 fn tmap(x: vec3f) -> vec3f { return sat3((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14)); }
 fn hh(p: vec2f) -> f32 { var q = fract(vec3f(p.xyx) * .1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+fn hueRot(c: vec3f, h: f32) -> vec3f {
+  let k = vec3f(.57735); let ch = cos(h);
+  return max(c * ch + cross(k, c) * sin(h) + k * dot(k, c) * (1. - ch), vec3f(0.));
+}
+// the corridor: a tunnel of billowing clouds, light at its end, golden sparks drifting past
+fn corridor(q: vec2f, t: f32, asp: f32) -> vec3f {
+  var d = q; d.x *= asp;
+  let r = length(d) + 1e-3; let a = atan2(d.y, d.x);
+  let z = .32 / r + t * .9;
+  let w = vec3f(cos(a) * 2.2, sin(a) * 2.2, z * 1.4);
+  let b0 = fbm(w, 5);
+  let b1 = fbm(w + vec3f(.12, .12, -.1) * (1. / (r + .2)), 5);
+  let puff = ss(.3, .6, b0);
+  // deep blue billows, their edges caught by the light at the end
+  let rim = ss(.02, .1, b0 - b1) * ss(.3, .5, b0) * ss(.62, .38, b0);
+  var wall = mix(vec3f(.05, .08, .15), vec3f(.32, .42, .6), puff * (.5 + .5 * ss(.7, .2, r)));
+  wall += vec3f(.85, .9, 1.) * rim * (.4 + 1.6 * ss(.8, .15, r));
+  wall = mix(wall, vec3f(1., .82, .55) * puff, ss(.4, .12, r) * .45);
+  let open = ss(.24, .09, r + (b0 - .5) * .08);
+  let light = mix(vec3f(.5, .65, 1.), vec3f(1.6, 1.5, 1.3), ss(.2, .0, r)) * (1. + 3. * exp(-r * 12.));
+  var col = mix(wall, light, open);
+  // a star of rays from the light, slowly turning
+  let rays = pow(.5 + .5 * sin(a * 24. + t * .15), 30.) + pow(.5 + .5 * sin(a * 11. - t * .1 + 1.), 40.) * .7;
+  col += vec3f(.8, .88, 1.) * rays * exp(-r * 3.5) * 1.6 + vec3f(1.6, 1.5, 1.3) * exp(-r * 40.) * 4.;
+  let sp = step(.993, hh(vec2f(floor(a * 50.), floor(z * 5.)))) * ss(.06, .4, r);
+  col += vec3f(1.5, 1.15, .6) * sp * 2.5;
+  return col;
+}
 @fragment fn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   var uv = fc.xy * g.res.zw;
   let t = g.cam.w;
@@ -733,6 +843,11 @@ fn hh(p: vec2f) -> f32 { var q = fract(vec3f(p.xyx) * .1031); q += dot(q, q.yzx 
     c = mix(c, max(rot * c, vec3f(0.)), ins * .7);
   }
   c += vec3f(1., .97, .92) * g.fx.w * 6.;
+  // the end: the sun's glare whitens everything, then the corridor, then colours drift slowly at the shore
+  let gl = g.fx2.x;
+  c = c * (1. + gl * 2.5) + vec3f(1., .95, .88) * gl * gl * gl * 5.;
+  if (g.fx2.y > 0.) { c = mix(c, corridor(q, g.fx2.w, g.res.x * g.res.w), g.fx2.y); }
+  if (g.fx2.z > 0.) { c = mix(c, hueRot(c, sin(t * .05) * 1.2), g.fx2.z * .3); }
   c *= g.camR.w;
   c *= 1. - dot(q, q) * .7;
   c = tmap(c);

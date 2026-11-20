@@ -296,3 +296,94 @@ function thoughtSequence(n) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------- thoughts in the corridor of light
+// peace and belonging; never repeated, not even across games (the ones already shown are kept in localStorage)
+const PAZ = [
+  'Está tudo bem. Sempre esteve.',
+  'Não preciso mais segurar nada.',
+  'Eu achava que estava sozinho. Nunca estive.',
+  'Cada pessoa que eu amei está aqui, de algum jeito.',
+  'O medo era só o tamanho que eu tinha.',
+  'Que leveza é essa? Parece que me lembrei de quem sou.',
+  'Nada do que eu fiz de bom se perdeu.',
+  'Eu me perdoo. E perdoo. E é fácil.',
+  'A luz não vem de fora. Ela me reconhece.',
+  'Estou voltando para um lugar onde nunca estive, e é casa.',
+  'Todas as perguntas cabem nesta calma.',
+  'Obrigado. Por tudo. Até pelo difícil.',
+  'Respirar, mesmo sem ar. Que bom.',
+  'O que eu procurava estava me procurando.',
+  'Não há pressa. Nunca houve.',
+  'Eu sou parte disso. Eu sempre fui parte disso.',
+  'As despedidas eram só curvas da mesma estrada.',
+  'Ninguém fica para trás.',
+  'Sinto o calor de mãos que eu nem conheço.',
+  'O amor que eu dei voltou multiplicado. Sem conta.',
+  'Tudo que pesava virou luz.',
+  'Lembro do primeiro sol que vi. Era este.',
+  'Eu era uma gota pensando que era o mar. Agora sou o mar lembrando da gota.',
+  'Silêncio. E dentro dele, uma música.',
+  'Não acabou. Só ficou inteiro.',
+  'Posso descansar agora.',
+  'Os que me esperavam estão sorrindo.',
+  'Aqui ninguém precisa provar nada.',
+  'A vida inteira foi um caminho até este abraço.',
+  'Eu entendo. Não com palavras. Entendo.',
+  'Cada estrela é alguém dizendo: estou aqui.',
+  'Fui criança, fui cansado, fui inteiro. Fui.',
+  'Que bom ter existido.',
+  'Toda lágrima tinha um sentido. Vejo agora.',
+  'A luz tem cheiro de manhã de domingo.',
+  'Estou exatamente onde deveria estar.',
+  'Sou bem-vindo. Sempre fui.',
+  'Nada falta.',
+  'As vozes que eu amo cantam baixinho, longe e perto.',
+  'O universo não era frio. Era só muito grande para um abraço só.',
+  'Eu me reconheço em tudo que brilha.',
+  'Não há fim. Há praia.',
+  'A saudade virou presença.',
+  'Tudo que eu soltei está seguro.',
+  'Calma como água parada ao entardecer.',
+  'Fui amado mais do que soube.',
+  'O tempo se ajoelhou para eu passar.',
+  'Mais claro. Mais leve. Mais perto.',
+  'Ninguém é estrangeiro aqui.',
+  'Cada passo que eu dei, mesmo os errados, me trouxe até esta luz.',
+  'Que estranho e que bonito: eu continuo.',
+  'Estou ouvindo o mar. Ainda nem vi, mas já ouço.',
+  'Somos muitos. Somos um.',
+  'Paz. Só isso. E é tudo.',
+  'Nunca foi sobre chegar. Era sobre voltar.',
+  'Sinto gratidão por cada dia comum.',
+  'A luz sabe meu nome. O verdadeiro.',
+  'Aqui o coração não bate. Ele brilha.',
+  'Eu era pequeno para caber tanto amor. Agora caibo.',
+  'Vou ficar um pouco. Talvez para sempre. Tanto faz.',
+];
+function peaceThoughts(n) {
+  let seen = [];
+  try { seen = JSON.parse(localStorage.planetasPaz || '[]'); } catch {}
+  let free = PAZ.map((_, i) => i).filter((i) => !seen.includes(i));
+  if (free.length < n) { seen = []; free = PAZ.map((_, i) => i); }
+  const out = [];
+  for (let k = 0; k < n; k++) { const j = free.splice(rnd() * free.length | 0, 1)[0]; out.push(PAZ[j]); seen.push(j); }
+  try { localStorage.planetasPaz = JSON.stringify(seen); } catch {}
+  return out;
+}
+
+// ---------------------------------------------------------------- the shore: souls speaking all at once, in many languages
+const PAZ_MUNDO = [
+  'Paz.', 'Estamos juntos.', 'Você chegou.', 'Bem-vindo de volta.', 'Ninguém está sozinho aqui.', 'Olha o mar.', 'Respira.', 'Somos um só.', 'Que bom te ver.', 'Fica.',
+  'Peace.', 'We are one.', 'You are home.', 'Welcome back.', 'Rest now.',
+  'Paz y bien.', 'Estás en casa.', 'Todo está bien.',
+  'La paix.', 'Tu es chez toi.', 'Nous sommes ensemble.',
+  'Pace.', 'Siamo insieme.',
+  'Frieden.', 'Wir sind eins.',
+  'Pax tecum.',
+  'שלום', 'سلام', 'السلام عليكم',
+  '平和', 'ようこそ', '和平', '我们在一起',
+  '평화', 'Мир.', 'Мы вместе.', 'Ειρήνη.',
+  'शांति', 'ॐ शान्ति', 'Amani.', 'Rauha.', "Py'aguapy.", 'Namastê.', 'Aloha.',
+  '...', '♡',
+];

@@ -28,6 +28,10 @@ Cada planeta tem um clima, e o clima decide a música, a luz e a gravidade: **le
 
 **Buraco negro.** Fica além dos planetas, com lente gravitacional, anel de fótons e disco de acreção. De longe a aura ainda vence a atração; abaixo de ~22 m ele te engole. A travessia dura de 2 a 3 minutos, com a realidade dobrada como um espelho d'água e pensamentos espaçados, e você sai do outro lado do sistema.
 
+Cada sistema tem 5 planetas (4 no nível Baixo).
+
+**O sol.** Há um jeito de terminar a viagem. Ele tem a ver com o sol, e só se abre para quem já atravessou o buraco negro.
+
 `?seed=123` na URL fixa o sistema. O botão **Novo sistema** sorteia outro.
 
 ## Biomas
