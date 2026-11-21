@@ -1,5 +1,9 @@
 # Jardim Orbital
 
+![Jardim Orbital](arte/capa-jardim-orbital-1920x1080.jpg)
+
+*Uma experiência extracorpórea imersiva em 360°.* Veja também [APRESENTACAO.md](APRESENTACAO.md).
+
 Exploração em primeira pessoa num sistema de miniplanetas com gravidade baixa. Cada sistema nasce de uma semente: três planetas de biomas diferentes, céu de nebulosa e espíritos luminosos que passam em órbita. Tudo é gerado por código, sem imagens, modelos ou arquivos de som, num único `index.html`.
 
 Baseado no [Abyssal Garden](https://github.com/Noniv/abyssal-garden) (MIT), de onde vêm o renderizador WebGPU, o bloom, a geração de malha por *surface nets* e o som sintetizado.
