@@ -6,3 +6,6 @@ arte/*.png
 media-kit/presskit.html
 jardim-orbital-media-kit.zip
 jardim-orbital.html
+servidor/dados/*.jsonl
+servidor/dados/*.json
+servidor/config.php

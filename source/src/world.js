@@ -229,10 +229,10 @@ function buildPlanet(p, D, N, VS, org) {
     shore.p = [wp[best * 3] + cu[0] * 1.7, wp[best * 3 + 1] + cu[1] * 1.7, wp[best * 3 + 2] + cu[2] * 1.7]; shore.u = cu.slice(0, 3);
     const near = (k, r) => hypot(wp[k * 3] - shore.p[0], wp[k * 3 + 1] - shore.p[1], wp[k * 3 + 2] - shore.p[2]) < r;
     // souls sitting along the waterline, looking at the waves (most of them within sight of the camera)
-    for (let tries = 0; tries < 20000 && seated.length < 38; tries++) {
+    for (let tries = 0; tries < 60000 && seated.length < 90; tries++) {
       const k = sand[rnd() * sand.length | 0], u = upAt(k), hs = hSea(u[3]);
-      if (hs < 0.4 || hs > 9 || !near(k, seated.length < 26 ? 38 : 140) || near(k, 5)) continue;
-      if (seated.some((q) => hypot(q.p[0] - wp[k * 3], q.p[1] - wp[k * 3 + 1], q.p[2] - wp[k * 3 + 2]) < 3.5)) continue;
+      if (hs < 0.4 || hs > 9 || !near(k, seated.length < 45 ? 40 : 170) || near(k, 5)) continue;
+      if (seated.some((q) => hypot(q.p[0] - wp[k * 3], q.p[1] - wp[k * 3 + 1], q.p[2] - wp[k * 3 + 2]) < 3)) continue;
       const n = [wn[k * 3], wn[k * 3 + 1], wn[k * 3 + 2]], f = normalize3([n[0] - u[0] * dot3(n, u) + rr(-0.15, 0.15), n[1] - u[1] * dot3(n, u) + rr(-0.15, 0.15), n[2] - u[2] * dot3(n, u) + rr(-0.15, 0.15)]);
       seated.push({ p: [wp[k * 3] - u[0] * 0.05, wp[k * 3 + 1] - u[1] * 0.05, wp[k * 3 + 2] - u[2] * 0.05], u: u.slice(0, 3), f, hue: rnd(), ph: rnd() });
     }

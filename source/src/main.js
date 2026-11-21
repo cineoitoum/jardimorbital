@@ -342,11 +342,16 @@ const key = (e, v) => {
     }
   }
 };
-addEventListener('keydown', (e) => { if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return; sound(); key(e, 1); });
+addEventListener('keydown', (e) => { if (msgOpen) return; if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return; sound(); key(e, 1); });
 addEventListener('keyup', (e) => key(e, 0));
 const release = () => { kf = kb = kl = kr = ku = kd = ks = kj = 0; cord.on = false; };
 const capture = () => { sound(); const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
-canvas.addEventListener('click', () => { if (!menu) capture(); });
+canvas.addEventListener('click', () => { if (!menu && !shoreFree) capture(); });
+// at the end the mouse is free (to click the links); dragging looks around
+let shoreFree = false, dragging = false;
+canvas.addEventListener('mousedown', (e) => { if (shoreFree && e.button === 0) dragging = true; });
+addEventListener('mouseup', () => (dragging = false));
+addEventListener('mousemove', (e) => { if (dragging && !document.pointerLockElement) { mdx += e.movementX; mdy += e.movementY; } });
 // right button: hold to keep the silver cord
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('mousedown', (e) => { if (e.button === 2 && !menu && !trav) castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])); });
@@ -355,7 +360,7 @@ addEventListener('mousemove', (e) => { if (document.pointerLockElement === canva
 document.addEventListener('pointerlockchange', () => {
   const on = document.pointerLockElement === canvas;
   body.classList.toggle('p', on);
-  if (!on && !menu) ui(true);
+  if (!on && !menu && !msgOpen && !shoreFree) ui(true);
 });
 function ui(show) {
   menu = show; release();
@@ -614,7 +619,7 @@ async function genShore() {
   }
   // a few souls drifting low over the water
   const fl = [];
-  for (let k = 0; k < 9; k++) fl.push(orbitSpirit(p.c, p.sea + rr(2, 7), rr(0.6, 1.3), rr(1, 1.7), 0, rnd(), rnd() < 0.6 ? rr(0.35, 0.55) : rr(0.9, 1.2)));
+  for (let k = 0; k < 24; k++) fl.push(orbitSpirit(p.c, p.sea + rr(2, 9), rr(0.5, 1.3), rr(1, 1.8), 0, rnd(), rnd() < 0.6 ? rr(0.35, 0.55) : rr(0.9, 1.2)));
   const flA = new Float32Array(fl.flat());
   const ocean = meshBuf(icosphere(6).build());
   SHORE = {
@@ -666,7 +671,8 @@ function endingStep(dt) {
   } else {
     END.shore = 1;
     END.glare = sstep(5, 0, END.t);
-    if (END.t > 40 && !END.credits) { END.credits = true; creditsEl.className = 'on'; }
+    if (END.t > 40 && !END.credits) { END.credits = true; creditsEl.className = 'on'; shoreFree = true; if (document.pointerLockElement) document.exitPointerLock(); }
+    if (END.t > 60 && !END.asked) { END.asked = true; openMsg(); }
     chorus(dt);
   }
   return cq;
@@ -843,6 +849,35 @@ async function photo() {
   flash = 0.35;
   setTimeout(() => body.classList.remove('ph'), 900);
 }
+// ---------------------------------------------------------------- a message, left at the sea
+// A minute after reaching the shore a panel offers to leave a message for the author. It goes to mensagem.php next
+// to the game (stored on the server and e-mailed); it is private and never shown to anyone else.
+let msgOpen = false;
+const msgEl = $('msg'), msgText = $('mt'), msgName = $('mn'), msgCount = $('mc'), msgSend = $('ms');
+function openMsg() {
+  msgOpen = true; release(); msgEl.className = 'on';
+  if (document.pointerLockElement) document.exitPointerLock();
+  setTimeout(() => msgText.focus(), 50);
+}
+function closeMsg() { msgOpen = false; msgEl.className = ''; }
+msgText.addEventListener('input', () => (msgCount.textContent = `${msgText.value.length} / 1500`));
+$('ml').onclick = closeMsg;
+$('msgAgain').onclick = () => { if (document.pointerLockElement) document.exitPointerLock(); openMsg(); };
+msgEl.querySelector('form').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = msgText.value.trim(); if (!text) { msgText.focus(); return; }
+  msgSend.disabled = true; msgCount.textContent = 'Enviando…';
+  try {
+    const r = await fetch('mensagem.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mensagem: text, nome: msgName.value.trim(), website: $('mw').value, semente: SEED, tempo: round(playTime) }) });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(r.status);
+    msgCount.textContent = 'Obrigado. Sua mensagem chegou.'; msgText.value = ''; msgName.value = '';
+    setTimeout(closeMsg, 2600);
+  } catch (err) {
+    msgCount.textContent = String(err.message) === '429' ? 'Muitas mensagens em pouco tempo. Tente mais tarde.' : 'Não foi possível enviar agora. Copie o texto para não perder.';
+  }
+  msgSend.disabled = false;
+};
 // ---------------------------------------------------------------- crossing the black hole
 const thoughtEl = $('th');
 function startCrossing() {
@@ -1119,7 +1154,7 @@ function talkUpdate(dt) {
   if (talk.t > talk.dur || d > 30) { talkEl.className = ''; talk = null; }
 }
 // the sun turns slowly around the system (a full turn in ~16 min): sunrises and sunsets on every planet
-let breath = 0;
+let breath = 0, playTime = 0;
 const SUN0 = SUN.slice(), SUNAX = normalize3(cross3(SUN0, [0.3, 1, 0.2]));
 function turnSun(dt) {
   if (END.stage !== 'play' || VISION) return;
@@ -1146,6 +1181,7 @@ function frame(now) {
   breath += ((kbr && !menu ? 1 : 0) - breath) * (1 - exp(-dtr / 1000 * 2.5));
   const dt = min(dtr / 1000, 0.05) * (1 - breath * 0.7);
   time += dt;
+  if (!menu) playTime += dtr / 1000;
   turnSun(dt);
   // resolution follows the frame rate: aim for 60 fps
   if (dtr < 500) { dynT += dtr; dynN++; }
@@ -1220,5 +1256,5 @@ function lookFrom(from, to) {
   const yaw = atan2(dot3(cross3(f, h), up), dot3(f, h));
   B = qnorm(qmul(B, [0, sin(yaw / 2), 0, cos(yaw / 2)])); pitch = Math.asin(clamp(dot3(dir, up), -1, 1)); groundT = 0;
 }
-window.__game = { get pulse() { return [endPulse, pulseVal, pulsePh]; }, markDone: (n) => { PL.slice(0, n).forEach((p) => (p.done = true)); }, get expel() { return expel; }, idle: (dt) => idleUpdate(dt), get idleT() { return idleT; }, vision: (f) => enterVision(f), leave: () => leaveVision(), beacons: () => PL.map((p) => [p.feel, !!p.beacon]), nearBeacon: () => { const p = nearBeacon(); return p && p.feel; }, interact, diaryOpen: (o) => diary(o), get breath() { return breath; }, shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); updateBurst(dt); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
+window.__game = { setBreath: (b) => { breath = b; }, get shoreFree() { return shoreFree; }, openMsg, get msgOpen() { return msgOpen; }, setPlayTime: (t) => { playTime = t; }, get pulse() { return [endPulse, pulseVal, pulsePh]; }, markDone: (n) => { PL.slice(0, n).forEach((p) => (p.done = true)); }, get expel() { return expel; }, idle: (dt) => idleUpdate(dt), get idleT() { return idleT; }, vision: (f) => enterVision(f), leave: () => leaveVision(), beacons: () => PL.map((p) => [p.feel, !!p.beacon]), nearBeacon: () => { const p = nearBeacon(); return p && p.feel; }, interact, diaryOpen: (o) => diary(o), get breath() { return breath; }, shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); updateBurst(dt); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
 requestAnimationFrame(frame);

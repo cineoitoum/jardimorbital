@@ -134,6 +134,20 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 #cr h2 { margin: 0 0 .4em; font: 300 2.6em/1 Georgia, serif; letter-spacing: .25em; text-transform: uppercase; }
 #cr b { display: block; font: 700 .7em/1.4 system-ui, sans-serif; letter-spacing: .3em; text-transform: uppercase; color: #ffd9a8; }
 #cr i { margin-top: 1.4em; font-size: 1.2em; }
+/* the message left at the sea */
+#msg { position: absolute; inset: 0; display: none; place-items: center; background: #07040f66; backdrop-filter: blur(3px); }
+#msg.on { display: grid; }
+#msg form { width: min(34em, 90vw); padding: 1.6em 1.8em; border-radius: .9em; background: #0d0820ee; box-shadow: 0 0 3em #000, inset 0 0 0 1px #c9b6ff33; color: #efe9ff; font: 400 .95em/1.5 system-ui, sans-serif; }
+#msg h2 { margin: 0 0 .3em; font: 300 1.6em Georgia, serif; font-style: italic; color: #fff; }
+#msg p { margin: 0 0 1em; color: #d8ccf5; }
+#msg textarea, #msg input { width: 100%; box-sizing: border-box; margin: 0 0 .7em; padding: .7em .8em; border: 0; border-radius: .5em; background: #ffffff12; color: #fff; font: 400 1em/1.5 Georgia, serif; box-shadow: inset 0 0 0 1px #c9b6ff44; }
+#msg textarea { height: 9em; resize: vertical; }
+#msg .row { display: flex; gap: .6em; align-items: center; }
+#msg .row span { flex: 1; font-size: .8em; color: #a99bd0; }
+#msg button { padding: .6em 1.2em; font-size: .8em; }
+#msg .later { background: none; color: #c9b6ff; box-shadow: inset 0 0 0 1px #c9b6ff55; }
+#msg .priv { margin: .9em 0 0; font-size: .78em; color: #a99bd0; }
+#msg .hp { position: absolute; left: -9999px; }
 #cr button { pointer-events: auto; margin-top: 1.6em; padding: .55em 1.2em; font-size: .7em; background: #fff2; color: #fff; box-shadow: inset 0 0 0 1px #fff6; }
 .p #cr button { pointer-events: none; }
 </style>
@@ -147,6 +161,15 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 <div id=pr><b>F</b> olhar para dentro</div>
 <div id=vf></div>
 <div id=dy></div>
+<div id=msg><form autocomplete=off>
+  <h2>Deixe uma mensagem</h2>
+  <p>Você chegou ao mar. Se quiser, deixe algo para quem fez esta viagem.</p>
+  <textarea id=mt maxlength=1500 placeholder="Escreva aqui…"></textarea>
+  <input id=mn maxlength=80 placeholder="Seu nome (opcional)">
+  <input id=mw class=hp tabindex=-1 placeholder=website>
+  <div class=row><span id=mc>0 / 1500</span><button type=button class=later id=ml>Agora não</button><button type=submit id=ms>Enviar</button></div>
+  <p class=priv>Sua mensagem é privada: chega só ao autor, Gustavo Serrate, e não é publicada.</p>
+</form></div>
 <div id=lb></div>
 <div id=cr>
   <h2>Jardim Orbital</h2>
@@ -155,7 +178,7 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
   <p><b>As falas</b>nascem de conversas reais da internet, no Reddit:<br>temas humanos reescritos e tirados de contexto de propósito</p>
   <p><b>Baseado em</b>Abyssal Garden, de Maksymilian Dendura (licença MIT)</p>
   <i>Obrigado por flutuar.</i>
-  <p style="display:flex;gap:.8em;justify-content:center"><button id=again>Começar outra vez</button><a class=back style="pointer-events:auto" href=https://www.serrate.com.br/outros-projetos/>Voltar ao site</a></p>
+  <p style="display:flex;gap:.8em;justify-content:center"><button id=again>Começar outra vez</button><button id=msgAgain style="pointer-events:auto">Deixar uma mensagem</button><a class=back style="pointer-events:auto" href=https://www.serrate.com.br/outros-projetos/>Voltar ao site</a></p>
 </div>
 <div id=m>
   <h1>Jardim Orbital</h1>

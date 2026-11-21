@@ -47,6 +47,12 @@ function mkSound(ac) {
   const choir = G(0.5, shore), f1 = BQ('bandpass', 750, 6, choir), f2 = BQ('bandpass', 1150, 8, choir);
   [261.6, 329.6, 392].forEach((f) => { const o = N(OscillatorNode, { type: 'sawtooth', frequency: f }, G(0.03, f1, f2)); lfo(5 + rnd(), 3, o.frequency); });
   lfo(0.07, 0.35, choir.gain);
+  // breathing (B): a very deep, warm drone and a slow tide of air, rising and falling about once every 5.5 s
+  const breathBus = G(0, out, G(1.2, wet));
+  for (const [f, v] of [[36.7, 0.22], [55, 0.14], [73.4, 0.07], [110, 0.025]]) { const g = G(v, BQ('lowpass', 260, 0.6, breathBus)); N(OscillatorNode, { frequency: f }, g); N(OscillatorNode, { frequency: f * 1.004 }, g); }
+  const air = G(0, breathBus); src(nb, 0.5, BQ('bandpass', 380, 0.8, air));
+  const tide = N(OscillatorNode, { frequency: 1.15 / (2 * Math.PI) }, G(0.35, air.gain));
+  const swell = G(0.3, breathBus.gain); tide.connect(swell);
   // ---------------------------------------------------------------- notes
   // a voice made for one note and thrown away; env: attack, decay time constant, level
   const voice = (dest, type, f, t, att, dec, vol, o = {}) => {
@@ -184,6 +190,7 @@ function mkSound(ac) {
       if (w > 0.01) s.song.tick(now, now + 0.5);
     }
     space.gain.setTargetAtTime((1 - wmax) * (1 - bhIn) * (1 - endF), t, 1.5);
+    breathBus.gain.setTargetAtTime(breath * 0.85, t, breath > 0.5 ? 0.8 : 0.5);
     hole.gain.setTargetAtTime(max(bhIn, bhNear * 0.6) * 0.9, t, 1);
     if (t > tC && wmax < 0.5 && !bhIn) { chime(t); tC = t + rr(2.5, 9); }
   };

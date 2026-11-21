@@ -928,9 +928,13 @@ fn corridor(q: vec2f, t: f32, asp: f32) -> vec3f {
   if (g.fx2.y > 0.) { c = mix(c, corridor(q, g.fx2.w, g.res.x * g.res.w), g.fx2.y); }
   if (g.fx2.z > 0.) { c = mix(c, hueRot(c, sin(t * .05) * 1.2), g.fx2.z * .3); }
   c *= g.camR.w;
+  // breathing: the world turns quiet and blue, a soft blue light swells and ebbs with each breath
   let br = g.misc2.x;
-  c = mix(c, vec3f(dot(c, vec3f(.3, .5, .2))), br * .35);
-  c *= 1. - dot(q, q) * (.7 + br * 1.2);
+  let bw = .5 + .5 * sin(t * 1.15);
+  let lum = dot(c, vec3f(.3, .5, .2));
+  c = mix(c, lum * vec3f(.55, .78, 1.25), br * .55);
+  c += vec3f(.05, .12, .32) * br * (.35 + .65 * bw) * (.4 + 1.3 * ss(.15, .75, length(q)));
+  c *= 1. - dot(q, q) * (.7 + br * .6);
   c = tmap(c);
   let l = dot(c, vec3f(.2126, .7152, .0722));
   // slightly faded blacks, like printed film
