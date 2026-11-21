@@ -10,6 +10,8 @@
 <meta property=og:type content=website>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=theme-color content=#07040f>
+<link rel=preconnect href=https://fonts.googleapis.com><link rel=preconnect href=https://fonts.gstatic.com crossorigin>
+<link rel=stylesheet href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap">
 <style>
 /* The class on <body> is the state of the page:
    l = loading, m = menu, g = in the scene (g p while the mouse is captured), l e = failed to start */
@@ -17,7 +19,7 @@ html { background: #07040f; }
 body {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; overflow: hidden;
   background: radial-gradient(#1d1036, #07040f 70%);
-  font: 700 clamp(13px, .7vw + .9vh, 36px)/1.4 system-ui, sans-serif; color: #efe9ff;
+  font: 700 clamp(13px, .7vw + .9vh, 36px)/1.4 'Jost', system-ui, sans-serif; color: #efe9ff;
   -webkit-user-select: none; user-select: none;
 }
 canvas {
@@ -34,7 +36,7 @@ body:not(.g) canvas { filter: blur(.6vmax) brightness(.55); transform: scale(1.0
 }
 .g #m, .m #l, .l #g { opacity: 0; visibility: hidden; }
 h1 {
-  margin: 0; font: 900 4.2em/1 system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  margin: 0; font: 900 4.2em/1 'Jost', system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase;
   color: #0000; background: linear-gradient(#fff 20%, #c9b6ff 55%, #4fe0e8);
   -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 .06em .25em #000c);
 }
@@ -52,14 +54,14 @@ p { margin: 0; }
 #l .back { display: none; margin: 1.2em auto 0; width: max-content; }
 .e #l .back { display: inline-flex; }
 #tg { margin-top: -.6em; font: italic 300 1.15em/1.4 Georgia, 'Times New Roman', serif; color: #e8ddff; letter-spacing: .02em; text-shadow: 0 0 1em #000; }
-#tg small { font: 400 .62em system-ui, sans-serif; letter-spacing: .25em; text-transform: uppercase; color: #c9b6ffaa; }
+#tg small { font: 400 .62em 'Jost', system-ui, sans-serif; letter-spacing: .25em; text-transform: uppercase; color: #c9b6ffaa; }
 #z { display: flex; justify-content: center; gap: .6em; }
 #z button, #z a { padding: .55em 1.1em; font-size: .8em; background: #07040fb3; color: #efe9ff; box-shadow: inset 0 0 0 1px #c9b6ff55; }
 
 button, a {
   display: flex; align-items: center; justify-content: center; gap: .6em; padding: .8em 1.4em; border: 0;
   border-radius: .5em; background: #fff; box-shadow: inset 0 -.2em #0003, 0 .3em 1em #0009;
-  font: 800 1em/1.2 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; text-decoration: none;
+  font: 800 1em/1.2 'Jost', system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; text-decoration: none;
   color: #170d2e; cursor: pointer; transition: transform .12s, filter .12s;
 }
 button:hover, a:hover { transform: translateY(-.12em); filter: brightness(1.15); }
@@ -92,15 +94,22 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 #o { position: absolute; top: .6em; right: .6em; display: none; padding: .3em .6em; background: #170d2ed9; box-shadow: inset 0 0 0 2px #c9b6ff, 0 .3em 1em #0009; font-size: 1.3em; color: #efe9ff; opacity: .8; }
 .g #o { display: flex; }
 .p #o { display: none; }
-#hk { position: absolute; left: 1.2em; bottom: 1em; display: none; padding: .7em 1em; border-radius: .5em; background: #07040f99; font: .72em/1.75 system-ui, sans-serif; color: #e8e0ff; text-shadow: 0 1px 3px #000; pointer-events: none; }
-#hk b { padding: 0 .35em; border-radius: .25em; background: #ffffff22; font-weight: 700; }
-.g #hk.on { display: block; }
+#hk { position: absolute; left: 1em; bottom: 1em; display: none; padding: .55em .7em .5em; border-radius: .6em; background: #07040fbf; border: 1px solid #ffffff14; backdrop-filter: blur(6px); font: .68em/1 'Jost', system-ui, sans-serif; color: #e8e0ffd9; text-shadow: 0 1px 2px #000; pointer-events: none; }
+#hk dl { display: grid; grid-template-columns: auto auto; gap: .42em .6em; margin: 0; align-items: center; }
+#hk dt { justify-self: end; margin: 0; }
+#hk dd { margin: 0; letter-spacing: .01em; }
+#hk kbd { display: inline-block; min-width: 1.5em; padding: .22em .4em; border-radius: .3em; background: #ffffff1c; border: 1px solid #ffffff22; font: 600 .95em/1 'Jost', system-ui, sans-serif; text-align: center; color: #fff; }
+#hk .off { display: none; opacity: .55; }
+.g #hk { display: block; }
+#hk:not(.on) { padding: .4em .55em; background: #07040f55; border-color: transparent; }
+#hk:not(.on) dl { display: none; }
+#hk:not(.on) .off { display: block; }
 .ph #hk { visibility: hidden; }
-#i { position: absolute; top: 1em; left: 1.2em; margin: 0; font: .8em/1.6 ui-monospace, Consolas, monospace; white-space: pre-wrap; text-shadow: 0 1px 4px #000; pointer-events: none; }
+#i { position: absolute; top: 1em; left: 1.2em; margin: 0; font: 300 .72em/1.6 'Jost', system-ui, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: #e8e0ffb3; white-space: pre-wrap; text-shadow: 0 1px 4px #000; pointer-events: none; }
 /* crosshair and the name of the planet you land on */
 #x { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fffa; box-shadow: 0 0 6px #fff8; display: none; pointer-events: none; }
 .g #x { display: block; }
-#n { position: absolute; left: 0; right: 0; bottom: 12%; text-align: center; font: 300 1.6em/1 system-ui, sans-serif; letter-spacing: .5em; text-transform: uppercase; color: #fff; text-shadow: 0 0 1em #8f73ff; opacity: 0; transition: opacity 1.5s; pointer-events: none; }
+#n { position: absolute; left: 0; right: 0; bottom: 12%; text-align: center; font: 300 1.6em/1 'Jost', system-ui, sans-serif; letter-spacing: .5em; text-transform: uppercase; color: #fff; text-shadow: 0 0 1em #8f73ff; opacity: 0; transition: opacity 1.5s; pointer-events: none; }
 .g #n.on { opacity: .85; }
 /* a soul speaking: handwritten-looking line beside it, letter by letter */
 #t { position: absolute; max-width: 22em; transform: translate(-50%, -100%); padding: .4em .9em; font: italic 400 1.05em/1.45 Georgia, 'Times New Roman', serif; color: #f4efff; text-align: center; text-shadow: 0 0 .6em #8f73ff, 0 0 .2em #000; opacity: 0; transition: opacity .8s; pointer-events: none; }
@@ -112,7 +121,7 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 .tk { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font: italic 400 1em/1.3 Georgia, 'Times New Roman', serif; color: #fff8f0; text-shadow: 0 0 .7em #ff9ad8, 0 0 .2em #000; opacity: 0; transition: opacity 1.4s; pointer-events: none; }
 .g .tk.on { opacity: .9; }
 /* the point of light: an invitation */
-#pr { position: absolute; left: 0; right: 0; bottom: 22%; text-align: center; font: 300 1.1em/1 system-ui, sans-serif; letter-spacing: .35em; text-transform: uppercase; color: #fff; text-shadow: 0 0 1em #fff8, 0 0 .3em #000; opacity: 0; transition: opacity .8s; pointer-events: none; }
+#pr { position: absolute; left: 0; right: 0; bottom: 22%; text-align: center; font: 300 1.1em/1 'Jost', system-ui, sans-serif; letter-spacing: .35em; text-transform: uppercase; color: #fff; text-shadow: 0 0 1em #fff8, 0 0 .3em #000; opacity: 0; transition: opacity .8s; pointer-events: none; }
 .g #pr.on { opacity: .85; }
 #pr b { padding: .15em .5em; border: 1px solid #fff8; border-radius: .3em; font-weight: 600; }
 /* a memory inside a vision */
@@ -122,7 +131,7 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 #dy { position: absolute; top: 6%; bottom: 6%; left: 50%; width: min(40em, 86vw); transform: translateX(-50%); overflow: auto; padding: 1.5em 2em; border-radius: .8em; background: #0a0716e6; box-shadow: 0 0 3em #000; font: 400 .95em/1.5 Georgia, serif; color: #eee6ff; opacity: 0; visibility: hidden; transition: opacity .5s, visibility .5s; }
 #dy.on { opacity: 1; visibility: visible; }
 #dy h2 { margin: 0 0 .5em; font: 300 1.8em Georgia, serif; letter-spacing: .2em; text-transform: uppercase; }
-#dy h3 { margin: 1.2em 0 .3em; font: 700 .7em system-ui, sans-serif; letter-spacing: .3em; text-transform: uppercase; color: #ffd9a8; }
+#dy h3 { margin: 1.2em 0 .3em; font: 700 .7em 'Jost', system-ui, sans-serif; letter-spacing: .3em; text-transform: uppercase; color: #ffd9a8; }
 #dy p { margin: .2em 0; font-style: italic; }
 /* photo: everything hidden, cinema bars */
 .ph #i, .ph #n, .ph #t, .ph .tk, .ph #x, .ph #vf, .ph #pr, .ph #o, .ph #th, .ph #dy { visibility: hidden !important; }
@@ -132,12 +141,12 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 #cr { position: absolute; left: 0; right: 0; bottom: 0; top: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.1em; text-align: center; pointer-events: none; opacity: 0; transform: translateY(30vh); transition: opacity 6s, transform 40s cubic-bezier(.2,.6,.3,1); color: #fff; text-shadow: 0 0 1em #000, 0 0 2.5em #6a4cff; font: 300 1.05em/1.5 Georgia, 'Times New Roman', serif; }
 #cr.on { opacity: 1; transform: translateY(-18vh); }
 #cr h2 { margin: 0 0 .4em; font: 300 2.6em/1 Georgia, serif; letter-spacing: .25em; text-transform: uppercase; }
-#cr b { display: block; font: 700 .7em/1.4 system-ui, sans-serif; letter-spacing: .3em; text-transform: uppercase; color: #ffd9a8; }
+#cr b { display: block; font: 700 .7em/1.4 'Jost', system-ui, sans-serif; letter-spacing: .3em; text-transform: uppercase; color: #ffd9a8; }
 #cr i { margin-top: 1.4em; font-size: 1.2em; }
 /* the message left at the sea */
 #msg { position: absolute; inset: 0; display: none; place-items: center; background: #07040f66; backdrop-filter: blur(3px); }
 #msg.on { display: grid; }
-#msg form { width: min(34em, 90vw); padding: 1.6em 1.8em; border-radius: .9em; background: #0d0820ee; box-shadow: 0 0 3em #000, inset 0 0 0 1px #c9b6ff33; color: #efe9ff; font: 400 .95em/1.5 system-ui, sans-serif; }
+#msg form { width: min(34em, 90vw); padding: 1.6em 1.8em; border-radius: .9em; background: #0d0820ee; box-shadow: 0 0 3em #000, inset 0 0 0 1px #c9b6ff33; color: #efe9ff; font: 400 .95em/1.5 'Jost', system-ui, sans-serif; }
 #msg h2 { margin: 0 0 .3em; font: 300 1.6em Georgia, serif; font-style: italic; color: #fff; }
 #msg p { margin: 0 0 1em; color: #d8ccf5; }
 #msg textarea, #msg input { width: 100%; box-sizing: border-box; margin: 0 0 .7em; padding: .7em .8em; border: 0; border-radius: .5em; background: #ffffff12; color: #fff; font: 400 1em/1.5 Georgia, serif; box-shadow: inset 0 0 0 1px #c9b6ff44; }
@@ -150,6 +159,33 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 #msg .hp { position: absolute; left: -9999px; }
 #cr button { pointer-events: auto; margin-top: 1.6em; padding: .55em 1.2em; font-size: .7em; background: #fff2; color: #fff; box-shadow: inset 0 0 0 1px #fff6; }
 .p #cr button { pointer-events: none; }
+
+/* start menu: dark, glowing type */
+#m { background: radial-gradient(ellipse at 50% 40%, #0b0718cc 0%, #05030cf2 75%); }
+h1 { font: 300 3.9em/1 'Cormorant Garamond', Georgia, serif; letter-spacing: .14em; text-transform: uppercase; color: #f3eeff; background: none; -webkit-background-clip: border-box; background-clip: border-box; filter: none;
+  text-shadow: 0 0 .25em #c9b6ff99, 0 0 .8em #8f73ff66, 0 0 2em #4fe0e833; animation: glow 6s ease-in-out infinite; }
+@keyframes glow { 50% { text-shadow: 0 0 .3em #d9ccffb3, 0 0 1em #8f73ff80, 0 0 2.4em #4fe0e84d; } }
+#tg { font: italic 300 1.35em/1.4 'Cormorant Garamond', Georgia, serif; color: #e8ddff; text-shadow: 0 0 .8em #8f73ff80; }
+#tg small { font: 300 .55em 'Jost', system-ui, sans-serif; letter-spacing: .35em; color: #c9b6ff99; text-shadow: none; }
+#m button, #m a { font-family: 'Jost', system-ui, sans-serif; font-weight: 400; letter-spacing: .22em; background: #0d0920d9; color: #efe9ff; box-shadow: inset 0 0 0 1px #c9b6ff40; text-shadow: 0 0 .6em #c9b6ff99; }
+#m button:hover, #m a:hover { filter: none; box-shadow: inset 0 0 0 1px #c9b6ffaa, 0 0 1.2em #8f73ff55; }
+#m #d { padding: .85em; font-size: 1.25em; font-weight: 500; background: #120c2ae6; color: #fff; box-shadow: inset 0 0 0 1px #c9b6ff99, 0 0 1.6em #8f73ff66; text-shadow: 0 0 .5em #fff, 0 0 1.2em #b9a3ff; }
+#m #d:hover { box-shadow: inset 0 0 0 1px #e2d8ff, 0 0 2.4em #8f73ff99; }
+#q, #k, #y { background: #0b0718b3; box-shadow: inset 0 0 0 1px #c9b6ff1f; font-weight: 400; }
+#m #q button { background: none; box-shadow: none; text-shadow: none; }
+#m #q button:hover { background: #c9b6ff1f; }
+#m #q .on { background: #c9b6ff26; box-shadow: inset 0 0 0 1px #c9b6ff88; color: #fff; text-shadow: 0 0 .6em #c9b6ff; }
+#m #y button { background: #1a1236; box-shadow: inset 0 0 0 1px #c9b6ff33; }
+#k { font-weight: 400; letter-spacing: .1em; color: #d8ceffcc; }
+#k b { background: #ffffff10; box-shadow: inset 0 0 0 1px #c9b6ff44; color: #fff; font-weight: 500; text-shadow: 0 0 .5em #c9b6ffaa; }
+#k p + p { border-left-color: #c9b6ff26; }
+#k { gap: 1.4em; padding: .9em 1.3em; font-size: .68em; }
+#k p { gap: .5em .8em; }
+#k p + p { padding-left: 1.4em; }
+#k p > :not(i) , #k p { white-space: nowrap; }
+#k b { padding: .18em .45em; }
+#m #f a { padding: 0; background: none; box-shadow: none; letter-spacing: .04em; text-shadow: none; color: #c9b6ff; }
+#k h2 { grid-column: 1 / -1; margin: 0 0 .3em; font: 300 .9em 'Jost', system-ui, sans-serif; letter-spacing: .35em; color: #c9b6ff99; }
 </style>
 </head>
 <body class=l>
@@ -192,21 +228,21 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
       <p id=z><button id=fs>Tela cheia</button><a class=back href=https://www.serrate.com.br/outros-projetos/>Voltar ao site</a></p>
       <div id=k>
         <p>
-          <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Andar, flutuando
-          <i><b>Espaço</b></i>Pular · segure: planar
-          <i><b>Shift</b></i>Aura: voar como nave
-          <i><b>Botão dir.</b><b>R</b></i>Cordão de prata
-          <i><b>F</b></i>Entrar na luz / voltar
+          <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Andar
+          <i><b>Espaço</b></i>Pular · 2× escapa
+          <i><b>Shift</b></i>Voar com a aura
+          <i><b>R</b></i>Cordão de prata
+          <i><b>F</b></i>Entrar na luz
         </p>
         <p>
-          <i><b>B</b></i>Respirar (segure)
+          <i><b>B</b></i>Respirar
           <i><b>J</b></i>Diário
           <i><b>P</b></i>Foto
           <i><b>T</b></i>Tela cheia
-          <i><b>1</b>–<b>5</b></i>Órbita dos planetas
+          <i><b>1</b>–<b>5</b></i>Ir a um planeta
           <i><b>Esc</b></i>Menu
           <i><b>M</b></i>Som
-          <i><b>H</b></i>Dados
+          <i><b>H</b></i>Comandos
         </p>
       </div>
     </div>
@@ -215,7 +251,7 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 </div>
 <button id=o aria-label=Menu>≡</button>
 <pre id=i></pre>
-<div id=hk><b>WASD</b> andar · no ar, W segue para onde você olha<br><b>Shift</b> aura: voar para onde o mouse aponta · <b>W</b> acelera · <b>S</b> freia<br><b>Espaço</b> pular / planar<br><b>R</b> / botão direito: cordão até a luz mais próxima (depois, até o sol)<br><b>F</b> entrar na luz · <b>B</b> respirar · <b>J</b> diário · <b>P</b> foto · <b>T</b> tela cheia<br><b>H</b> esconder esta cola</div>
+<div id=hk class=on><dl><dt><kbd>WASD</kbd></dt><dd>andar</dd><dt><kbd>Shift</kbd></dt><dd>voar para onde olha</dd><dt><kbd>W · S</kbd></dt><dd>acelerar · frear</dd><dt><kbd>Espaço</kbd></dt><dd>pular · 2× escapa</dd><dt><kbd>R</kbd></dt><dd>cordão até a luz</dd><dt><kbd>F</kbd></dt><dd>entrar na luz</dd><dt><kbd>B</kbd></dt><dd>respirar</dd><dt><kbd>J</kbd></dt><dd>diário</dd><dt><kbd>P</kbd></dt><dd>foto</dd><dt><kbd>T</kbd></dt><dd>tela cheia</dd><dt><kbd>H</kbd></dt><dd>esconder</dd></dl><span class=off><kbd>H</kbd> comandos</span></div>
 <script>
 /*SCRIPT*/
 </script>

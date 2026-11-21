@@ -53,7 +53,7 @@ O projeto foi desenvolvido em colaboração com inteligência artificial e parte
 - **Baseado em:** Abyssal Garden, de Maksymilian Dendura (licença MIT)
 - **Onde:** [www.serrate.com.br/jardim-orbital](https://www.serrate.com.br/jardim-orbital/)
 - **Requisitos:** computador com Chrome ou Edge atualizado (WebGPU). Melhor com fones de ouvido, no escuro e em tela cheia.
-- **Controles essenciais:** mouse para olhar · WASD para andar · Shift para voar · F para entrar na luz · R para o fio de prata · H mostra todos os comandos
+- **Controles essenciais:** mouse para olhar · WASD para andar · Shift para voar · F para entrar na luz · R para o fio de prata · H mostra ou esconde a lista de comandos
 
 ---
 

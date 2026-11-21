@@ -321,6 +321,7 @@ function collide(mv, up) {
 }
 
 // ---------------------------------------------------------------- input
+const DEBUG = /[?&]debug\b/.test(location.search);
 let kbr = 0, kf = 0, kb = 0, kl = 0, kr = 0, ku = 0, kd = 0, ks = 0, kj = 0, jumpReq = 0, mdx = 0, mdy = 0, menu = true, hud = true;
 $('hk').className = 'on';
 const key = (e, v) => {
@@ -1208,7 +1209,8 @@ function frame(now) {
   if (!menu && !VISION && groundT > 0 && near !== lastNear) { const p = PL[near]; lastNear = near; label.textContent = `${p.name} · ${STORY[p.feel].name} · ${p.g.toFixed(1)} m/s²`; label.className = 'on'; labelT = 5; }
   promptEl.className = !menu && !VISION && END.stage === 'play' && !trav && nearBeacon() ? 'on' : '';
   if (labelT > 0 && (labelT -= dt) <= 0) label.className = '';
-  if (hud) {
+  if (hud && !DEBUG) { const t = menu || VISION || END.stage !== 'play' ? '' : `lembranças ${PL.filter((p) => p.done).length} de ${PL.length}`; if (info.textContent !== t) info.textContent = t; }
+  if (hud && DEBUG) {
     hN++; hT += dtr; if (dtr > hMax) hMax = dtr;
     if (hT > 500) {
       const gm = hypot(gv[0], gv[1], gv[2]);
