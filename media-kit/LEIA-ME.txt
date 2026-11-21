@@ -1,0 +1,12 @@
+JARDIM ORBITAL: KIT DE MÍDIA
+Uma experiência extracorpórea imersiva em 360°, de Gustavo Serrate.
+
+jardim-orbital-press-kit.pdf   apresentação em 4 páginas (sobre, sinopse, imagens, ficha)
+textos/release.md              release curto para imprensa
+textos/apresentacao-completa.md  texto completo de apresentação
+textos/legendas-redes.md       legendas prontas para Instagram, LinkedIn, X e carrossel
+imagens/                       arte renderizada pelo próprio jogo (capa, posts, story, banners)
+logo/                          logotipo-texto em versão clara (para fundos escuros) e escura (para fundos claros)
+
+Uso das imagens: livre para divulgação do projeto, com crédito "Jardim Orbital, de Gustavo Serrate".
+Onde: www.serrate.com.br/jardim-orbital, no computador, com Chrome ou Edge atualizado.
