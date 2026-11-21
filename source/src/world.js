@@ -200,10 +200,9 @@ function buildPlanet(p, D, N, VS, org) {
     if (beacon) {
       const { p: q, u } = beacon, at = (h) => [q[0] + u[0] * h, q[1] + u[1] * h, q[2] + u[2] * h];
       // a square of white light floating low over the ground, tinted by the feeling at its edges
-      beaconAt = [glints.length / 8, 71];
-      glints.push(...at(1.9), 0.9, 2.2 + bc[0] * 0.3, 2.2 + bc[1] * 0.3, 2.2 + bc[2] * 0.3, 2.5);
-      // a faint column above it, to find it from afar
-      for (let k = 0; k < 70; k++) { const h = 3.5 + k * k * 0.05, f = (1 - k / 70) * 0.35; glint(...at(h), 0.25 + k * 0.01, bc[0] * f, bc[1] * f, bc[2] * f, 0); }
+      // only a square of light, floating above the ground
+      beaconAt = [glints.length / 8, 1];
+      glints.push(...at(2.6), 1.1, 2.2 + bc[0] * 0.3, 2.2 + bc[1] * 0.3, 2.2 + bc[2] * 0.3, 2.5);
     }
   }
   const shore = {};

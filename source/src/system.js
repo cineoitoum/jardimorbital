@@ -77,6 +77,8 @@ function makeSystem(seed, count = 5) {
       col: pal.col.map((h) => jit(lin(h), 0.12)), atm: jit(lin(pal.atm), 0.1), dens: pal.dens * rr(0.8, 1.25), H: pal.H * rr(0.85, 1.2), emis: pal.emis,
     });
   }
+  // each planet holds what is within ~110 m of its relief
+  for (const p of planets) p.ri = p.R + p.hmax + 110;
   const neb = NEBULAE[rnd() * NEBULAE.length | 0].map((h) => jit(lin(h), 0.15));
   // a black hole out past the planets: rs is the visual radius, nr the point of no return
   const ctr = [0, 1, 2].map((k) => planets.reduce((a, p) => a + p.c[k], 0) / planets.length);
@@ -102,6 +104,12 @@ function makeShore(sys) {
   };
 }
 
+// speed needed to leave planet p's hold starting at radius r
+function escapeSpeed(p, r) {
+  const ri = p.ri || p.R + p.hmax + 110; let e = 0;
+  for (let x = r; x < ri; x += 1) e += p.g * max((p.R / x) * (p.R / x), 0.35) * sstep(ri, ri - 25, x);
+  return sqrt(2 * e);
+}
 // gravity at (x, y, z): the sum of every planet's pull, falling off with the square of the distance
 function gravity(planets, x, y, z, out, bh) {
   out[0] = out[1] = out[2] = 0;
@@ -111,13 +119,20 @@ function gravity(planets, x, y, z, out, bh) {
     const a = bh.GM / (d * d) * sstep(250, 140, d) / d;
     out[0] += dx * a; out[1] += dy * a; out[2] += dz * a;
   }
+  // the planet whose ground is nearest rules: the others fade out quickly (smoothly, so the pull turns gently
+  // where two holds meet). A heavy neighbour never drags you off a light planet, and there is no dead zone close by.
+  let sdMin = 1e9;
+  for (const p of planets) sdMin = min(sdMin, hypot(p.c[0] - x, p.c[1] - y, p.c[2] - z) - p.R - p.hmax);
+  let ws = 0; const acc = [0, 0, 0];
   for (const p of planets) {
-    const dx = p.c[0] - x, dy = p.c[1] - y, dz = p.c[2] - z, d = max(hypot(dx, dy, dz), p.R * 0.5);
-    // each planet only holds what is inside its sphere of influence, fading out a little past the atmosphere,
-    // so a heavy neighbour never pulls you off a light planet
-    const ri = p.R + p.hmax + 75;
-    const a = p.g * (p.R / d) * (p.R / d) / d * sstep(ri, ri * 0.72, d);
-    out[0] += dx * a; out[1] += dy * a; out[2] += dz * a;
+    const dx = p.c[0] - x, dy = p.c[1] - y, dz = p.c[2] - z, d = max(hypot(dx, dy, dz), p.R * 0.5), ri = p.ri || p.R + p.hmax + 110;
+    const w = exp(-(d - p.R - p.hmax - sdMin) / 10);
+    ws += w;
+    if (d > ri) continue;
+    // inside the hold the pull never drops below a third of the surface gravity
+    const a = p.g * max((p.R / d) * (p.R / d), 0.35) * sstep(ri, ri - 25, d) * w / d;
+    acc[0] += dx * a; acc[1] += dy * a; acc[2] += dz * a;
   }
+  out[0] += acc[0] / max(ws, 1e-6); out[1] += acc[1] / max(ws, 1e-6); out[2] += acc[2] / max(ws, 1e-6);
   return out;
 }

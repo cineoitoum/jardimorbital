@@ -599,7 +599,9 @@ fn quad(vi: u32, P: vec3f, size: f32, col: vec4f) -> VO {
   // only glints on the near side of their planet
   let up = normalize(a.xyz - pu.c.xyz);
   if (dot(up, normalize(g.cam.xyz - a.xyz)) < -.25) { c = vec3f(0.); }
-  return quad(vi, a.xyz, a.w, vec4f(c, select(step(1., b.w), 2., b.w >= 2.)));
+  var P = a.xyz;
+  if (b.w >= 2.) { P += up * sin(g.cam.w * .6 + a.x) * .25; }
+  return quad(vi, P, a.w, vec4f(c, select(step(1., b.w), 2., b.w >= 2.)));
 }
 // dust drifting around the camera in a 50 m box
 @vertex fn vsDust(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f) -> VO {
@@ -913,6 +915,13 @@ fn corridor(q: vec2f, t: f32, asp: f32) -> vec3f {
     c = mix(c, max(rot * c, vec3f(0.)), ins * .7);
   }
   c += vec3f(1., .97, .92) * g.fx.w * 6.;
+  // the end of the crossing: each beat the picture swells, and a light grows in the middle, coming closer
+  let ep = g.misc2.z; let pv = g.misc2.w;
+  if (ep > 0.) {
+    let r = length(q * vec2f(g.res.x * g.res.w, 1.));
+    c *= 1. + pv * .6;
+    c += vec3f(1., .92, .8) * (exp(-r * (9. - ep * 6.)) * ep * ep * 3. + exp(-r * 3.) * pv * .4);
+  }
   // the end: the sun's glare whitens everything, then the corridor, then colours drift slowly at the shore
   let gl = g.fx2.x;
   c = c * (1. + gl * 2.5) + vec3f(1., .95, .88) * gl * gl * gl * 5.;

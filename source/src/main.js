@@ -131,7 +131,7 @@ for (const p of PL) {
   }
   p.seatedPos = w.seated;
   p.beacon = w.beacon;
-  if (p.beacon) { const b = p.beacon, c = VIS_ENV[p.feel].beam; lightsStatic.push([b.p[0] + b.u[0] * 1.9, b.p[1] + b.u[1] * 1.9, b.p[2] + b.u[2] * 1.9, 6, 1 + c[0] * 0.15, 1 + c[1] * 0.15, 1 + c[2] * 0.15, 20]); }
+  if (p.beacon) { const b = p.beacon, c = VIS_ENV[p.feel].beam; lightsStatic.push([b.p[0] + b.u[0] * 2.6, b.p[1] + b.u[1] * 2.6, b.p[2] + b.u[2] * 2.6, 6, 1 + c[0] * 0.15, 1 + c[1] * 0.15, 1 + c[2] * 0.15, 20]); }
   const nsp0 = spirits.length;
   await new Promise((r) => setTimeout(r));
 }
@@ -372,7 +372,7 @@ document.querySelectorAll('#q button').forEach((b, i) => {
 const lkS = [0, 0];
 // aura: the high-speed mode (Shift). It does not burn anything: a glow gathers around you and you steer like a ship.
 // Holding one direction builds acceleration; to brake, push the other way. No automatic braking out in space.
-let lastJump = -99, launchT = 0, aura = 0, auraSpeed = 0, auraHold = 0, auraDir = [0, 0, 0], shake = 0, flash = 0, brakeLock = 0;
+let lastJump = -99, launchT = 0, airJump = false, aura = 0, auraSpeed = 0, auraHold = 0, auraDir = [0, 0, 0], shake = 0, flash = 0, brakeLock = 0;
 // the silver cord: hooks the ground you look at and reels you in, softly
 const cord = { on: false, a: [0, 0, 0], len: 0, t: 0 };
 // black hole: bhNear 0..1 as you approach, bhIn 0..1 while crossing it
@@ -395,7 +395,7 @@ function aimPlanet(look) {
 function castCord(look) {
   // the cord is a compass: it reaches for the nearest light not yet seen, wherever it is, and pulls you there
   let lb = null, ld = 1e9;
-  for (const p of PL) if (p.beacon && !p.done) { const b = p.beacon, x = [b.p[0] + b.u[0] * 1.9, b.p[1] + b.u[1] * 1.9, b.p[2] + b.u[2] * 1.9], d = hypot(x[0] - pos[0], x[1] - pos[1], x[2] - pos[2]); if (d < ld) { ld = d; lb = x; } }
+  for (const p of PL) if (p.beacon && !p.done) { const b = p.beacon, x = [b.p[0] + b.u[0] * 2.6, b.p[1] + b.u[1] * 2.6, b.p[2] + b.u[2] * 2.6], d = hypot(x[0] - pos[0], x[1] - pos[1], x[2] - pos[2]); if (d < ld) { ld = d; lb = x; } }
   if (lb) return hook(lb);
   // every light seen: the cord leads to the sun
   if (PL.every((p) => !p.beacon || p.done)) { hook([pos[0] + SUN[0] * 400, pos[1] + SUN[1] * 400, pos[2] + SUN[2] * 400]); cord.sun = true; return; }
@@ -466,6 +466,9 @@ function step(dt) {
   inWater = 0; near = -1; let nd = 1e9;
   for (const p of PL) { const d = hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]); if (d - p.R < nd) { nd = d - p.R; near = p.i; } if (p.sea && d < p.sea + 0.3) inWater = 1; }
   const inAtm = near >= 0 && nd < PL[near].hmax + PL[near].H * 3;
+  // over a planet: W in the air keeps level with the ground instead of following the view
+  // anywhere within the planet's hold; to leave it, use the double jump or the aura
+  const lowAir = near >= 0 && nd < PL[near].ri - PL[near].R && gm > 0.05;
   const mf = kf - kb, mr = kr - kl;
   const auraOn = ks && !inWater && !expel;
   const speed = hypot(vel[0], vel[1], vel[2]);
@@ -493,7 +496,8 @@ function step(dt) {
       // walking: answers quickly, with just a little glide when you start and stop
       const sp = 4.2, vr = dot3(vel, up), vn = min(vr, 0) - gm * dt, k = 1 - exp(-dt * 7), tw = [wx * sp, wy * sp, wz * sp];
       for (let i = 0; i < 3; i++) { const vt = vel[i] - up[i] * vr; vel[i] = vt + (tw[i] - vt) * k + up[i] * vn; }
-      if (jumpReq) { for (let i = 0; i < 3; i++) vel[i] += up[i] * 5.5; groundT = 0; lastJump = time; jumpReq = 0; }
+      if (jumpReq) { for (let i = 0; i < 3; i++) vel[i] += up[i] * 5.5; groundT = 0; lastJump = time; jumpReq = 0; airJump = true; }
+      else airJump = false;
       airAim = null;
       airAim = null;
     } else {
@@ -503,10 +507,18 @@ function step(dt) {
         // in the air, W goes where you look. Looking at a planet, you keep heading for it at a cruising speed and
         // slow down near the ground so you land softly; A / D drift sideways
         // the target stays locked while W is held, even as the body turns towards the new planet
-        if (mf > 0 && !airAim) airAim = aimPlanet(look);
+        // over a planet, looking down at the ground: go there; looking ahead: walk level through the air
+        if (mf > 0 && !airAim && (!lowAir || dot3(look, up) < -0.3)) airAim = aimPlanet(look);
         if (mf <= 0) airAim = null;
         const aim = airAim;
-        if (aim) {
+        if (lowAir && !aim) {
+          // close to the ground: W walks through the air, level with the surface, and gravity brings you down
+          const k = 1 - exp(-dt * 3); let vr = dot3(vel, up);
+          if (!airJump && vr > 0) vr *= exp(-dt * 2);
+          // walking off a ledge or down through the air: settle towards the ground a little faster
+          if (!airJump && mf) vr -= 1.6 * dt;
+          for (let i = 0; i < 3; i++) { const vt = vel[i] - up[i] * vr; vel[i] = vt + ([wx, wy, wz][i] * 4.2 - vt) * k + up[i] * vr; }
+        } else if (aim) {
           const d = [aim.x[0] - pos[0], aim.x[1] - pos[1], aim.x[2] - pos[2]], L = hypot(...d);
           const cruise = clamp(2.5 + (L - 3) * 0.35, 2.5, 16), k = 1 - exp(-dt * 1.6);
           for (let i = 0; i < 3; i++) vel[i] += (d[i] / L * cruise - vel[i]) * k;
@@ -516,18 +528,23 @@ function step(dt) {
       }
       // holding Space in the air: you glide, falling slower
       if (kj) { const vn = dot3(vel, up); if (vn < 0) for (let i = 0; i < 3; i++) vel[i] -= up[i] * vn * min(1, dt * 1.5); }
-      // let go of the aura and you glide on, slowing down until you nearly stop
+      // let go of the aura and you glide on, slowing down until you nearly stop. Only the sideways motion is damped
+      // near a planet, so falling stays free and you come down to the ground
       let drag = launchT > 0 ? 0.01 : 0.45;
       if (inWater) { drag = 2.2; for (let i = 0; i < 3; i++) vel[i] += up[i] * gm * 1.25 * dt; }
-      const kk = exp(-drag * dt); for (let i = 0; i < 3; i++) vel[i] *= kk;
+      const kk = exp(-drag * dt);
+      if (gm > 0.05 && !inWater && launchT <= 0) {
+        const vr = dot3(vel, up), kr = exp(-0.04 * dt);
+        for (let i = 0; i < 3; i++) vel[i] = (vel[i] - up[i] * vr) * kk + up[i] * vr * kr;
+      } else for (let i = 0; i < 3; i++) vel[i] *= kk;
     }
   }
   // a second jump in the air, soon after the first: thrown clear of the planet, even a heavy one (out of craters)
   if (jumpReq && groundT <= 0 && time - lastJump < 1.6 && near >= 0 && !auraOn) {
-    const p = PL[near], ri = p.R + p.hmax + 75, vesc = sqrt(2 * p.g * p.R * max(0.2, 1 - p.R / ri));
-    const v = vesc * 1.3 + 6;
+    const p = PL[near], vesc = escapeSpeed(p, hypot(pos[0] - p.c[0], pos[1] - p.c[1], pos[2] - p.c[2]));
+    const v = vesc * 1.25 + 6;
     for (let i = 0; i < 3; i++) vel[i] = up[i] * v + look[i] * 4;
-    launchT = 6; lastJump = -99; flash = max(flash, 0.25); speakSound('cord');
+    launchT = 6; lastJump = -99; airJump = true; flash = max(flash, 0.25); speakSound('cord');
   }
   jumpReq = 0;
   launchT = max(0, launchT - dt);
@@ -545,7 +562,7 @@ function step(dt) {
       for (let i = 0; i < 3; i++) vel[i] += (u[i] * 22 - vel[i]) * (1 - exp(-dt * 0.6));
     } else if (L > 3000) cord.on = false;
     // arrived at the light: let go
-    else if (L < 4.5 && PL.some((p) => p.beacon && !p.done && hypot(p.beacon.p[0] + p.beacon.u[0] * 1.9 - cord.a[0], p.beacon.p[1] + p.beacon.u[1] * 1.9 - cord.a[1], p.beacon.p[2] + p.beacon.u[2] * 1.9 - cord.a[2]) < 0.1)) cord.on = false;
+    else if (L < 4.5 && PL.some((p) => p.beacon && !p.done && hypot(p.beacon.p[0] + p.beacon.u[0] * 2.6 - cord.a[0], p.beacon.p[1] + p.beacon.u[1] * 2.6 - cord.a[1], p.beacon.p[2] + p.beacon.u[2] * 2.6 - cord.a[2]) < 0.1)) cord.on = false;
     else if (L > cord.len) {
       const str = min((L - cord.len) * 2.2, 25);
       for (let i = 0; i < 3; i++) vel[i] += u[i] * str * dt;
@@ -729,7 +746,7 @@ function visionData(feel) {
   });
 }
 function nearBeacon() {
-  for (const p of PL) { const b = p.beacon; if (b && !p.done && hypot(pos[0] - b.p[0] - b.u[0] * 1.9, pos[1] - b.p[1] - b.u[1] * 1.9, pos[2] - b.p[2] - b.u[2] * 1.9) < 5) return p; }
+  for (const p of PL) { const b = p.beacon; if (b && !p.done && hypot(pos[0] - b.p[0] - b.u[0] * 2.6, pos[1] - b.p[1] - b.u[1] * 2.6, pos[2] - b.p[2] - b.u[2] * 2.6) < 5) return p; }
   return null;
 }
 function interact() {
@@ -741,7 +758,7 @@ function interact() {
 const BURSTN = 420, burstArr = new Float32Array(BURSTN * 8), bBurst = device.createBuffer({ size: burstArr.byteLength, usage: BU.VERTEX | BU.COPY_DST });
 let burst = null;
 function explode(p) {
-  const b = p.beacon, c = VIS_ENV[p.feel].beam, o = [b.p[0] + b.u[0] * 1.9, b.p[1] + b.u[1] * 1.9, b.p[2] + b.u[2] * 1.9];
+  const b = p.beacon, c = VIS_ENV[p.feel].beam, o = [b.p[0] + b.u[0] * 2.6, b.p[1] + b.u[1] * 2.6, b.p[2] + b.u[2] * 2.6];
   const parts = [];
   for (let i = 0; i < BURSTN; i++) { const d = normalize3([rr(-1, 1), rr(-1, 1), rr(-1, 1)]), sp = rr(2, 16) * (i < 40 ? 0.3 : 1); parts.push([d[0] * sp, d[1] * sp, d[2] * sp, rnd()]); }
   burst = { o, c, parts, t: 0 };
@@ -786,7 +803,6 @@ function visionStep(dt) {
   // memories, far apart, never the same twice in a game
   if (v.t > v.next) { fragEl.textContent = nextFragment(v.feel); fragEl.className = 'on'; v.shown = v.t; v.next = v.t + rr(9, 13); }
   if (v.t - v.shown > 7.5) fragEl.className = '';
-  chorusRun(dt, v.V.pts, () => STORY[v.feel].words[rnd() * STORY[v.feel].words.length | 0], v.t > 3, 30);
   return qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]);
 }
 function renderVision(r) {
@@ -823,9 +839,19 @@ function startCrossing() {
   cord.on = false;
   trav = { t: 0, dur: rr(130, 175), next: 7, list: thoughtSequence(12), k: 0, show: -99 };
 }
+let endPulse = 0, pulseVal = 0, pulsePh = 0;
 function crossing(dt) {
   const T = trav;
   T.t += dt;
+  // the last half minute: a pulse that quickens (0.3 to 4 beats a second) and a light coming closer
+  endPulse = sstep(T.dur - 30, T.dur - 1, T.t);
+  if (endPulse > 0) {
+    const f = 0.3 + 3.7 * endPulse * endPulse, before = pulsePh;
+    pulsePh += f * dt;
+    if (floor(pulsePh) > floor(before)) speakSound('pulse');
+    const ph = pulsePh % 1;
+    pulseVal = exp(-ph * 7) * endPulse;
+  }
   bhIn = sstep(0, 5, T.t) * sstep(T.dur, T.dur - 6, T.t);
   // drifting slowly round the middle, looking wherever you want
   const a = T.t * 0.05;
@@ -843,7 +869,7 @@ function crossing(dt) {
     thoughtEl.className = '';
     const c = BH.ctr, d = normalize3([c[0] - BH.c[0], c[1] - BH.c[1], c[2] - BH.c[2]]);
     for (let k = 0; k < 3; k++) { pos[k] = c[k] + d[k] * (BH.far + 70); vel[k] = -d[k] * 16; }
-    trav = null; bhIn = 0; flash = 1; groundT = 0; END.crossed = true;
+    trav = null; bhIn = 0; flash = 1; groundT = 0; END.crossed = true; endPulse = 0; pulseVal = 0; pulsePh = 0;
   }
   return qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]);
 }
@@ -880,7 +906,7 @@ function uniforms(cq) {
   // the view widens with speed and inside the black hole, and shakes with speed and near the hole
   const spd = hypot(vel[0], vel[1], vel[2]);
   fovNow += (FOV + 0.38 * sstep(8, 75, spd) * (0.4 + 0.6 * aura) + 0.35 * bhIn - fovNow) * 0.08;
-  shake = 0.006 * sstep(15, 90, spd) * (0.3 + aura) + 0.02 * bhNear * (1 - bhIn);
+  shake = 0.006 * sstep(15, 90, spd) * (0.3 + aura) + 0.02 * bhNear * (1 - bhIn) + 0.012 * endPulse * (0.4 + pulseVal);
   if (shake > 1e-4) {
     const t = time * 9, q = [turb(t, 1) * shake, turb(t, 4) * shake, turb(t, 7) * shake * 0.5, 1];
     cq = qnorm(qmul(cq, q));
@@ -909,7 +935,7 @@ function uniforms(cq) {
   const cx = vp[0] * SUN[0] + vp[4] * SUN[1] + vp[8] * SUN[2], cy = vp[1] * SUN[0] + vp[5] * SUN[1] + vp[9] * SUN[2], cw = vp[3] * SUN[0] + vp[7] * SUN[1] + vp[11] * SUN[2];
   UG.set([(cx / cw * 0.5 + 0.5) * W, (0.5 - cy / cw * 0.5) * H, cw > 0 ? 1 : 0, SYS.nebStyle], 72);
   VIS.forEach((p, i) => UG.set([...p.c, p.R, ...p.atm, p.R + p.hmax + p.H * 4, p.dens, p.H, p.sea, p.ring || 0], 76 + i * 12));
-  UG.set([breath, VISION ? 1 : 0, 0, 0], 296);
+  UG.set([breath, VISION ? 1 : 0, endPulse, pulseVal], 296);
   // lights: the lamp, then the nearest spirits
   const L = [];
   // you are an orb of light that cannot see itself: a soft glow all around you, always
@@ -1184,5 +1210,5 @@ function lookFrom(from, to) {
   const yaw = atan2(dot3(cross3(f, h), up), dot3(f, h));
   B = qnorm(qmul(B, [0, sin(yaw / 2), 0, cos(yaw / 2)])); pitch = Math.asin(clamp(dot3(dir, up), -1, 1)); groundT = 0;
 }
-window.__game = { markDone: (n) => { PL.slice(0, n).forEach((p) => (p.done = true)); }, get expel() { return expel; }, idle: (dt) => idleUpdate(dt), get idleT() { return idleT; }, vision: (f) => enterVision(f), leave: () => leaveVision(), beacons: () => PL.map((p) => [p.feel, !!p.beacon]), nearBeacon: () => { const p = nearBeacon(); return p && p.feel; }, interact, diaryOpen: (o) => diary(o), get breath() { return breath; }, shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); updateBurst(dt); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
+window.__game = { get pulse() { return [endPulse, pulseVal, pulsePh]; }, markDone: (n) => { PL.slice(0, n).forEach((p) => (p.done = true)); }, get expel() { return expel; }, idle: (dt) => idleUpdate(dt), get idleT() { return idleT; }, vision: (f) => enterVision(f), leave: () => leaveVision(), beacons: () => PL.map((p) => [p.feel, !!p.beacon]), nearBeacon: () => { const p = nearBeacon(); return p && p.feel; }, interact, diaryOpen: (o) => diary(o), get breath() { return breath; }, shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); updateBurst(dt); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
 requestAnimationFrame(frame);

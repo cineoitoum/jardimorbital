@@ -139,6 +139,12 @@ function mkSound(ac) {
   });
   // a soul speaking: a soft glide; a thought inside the black hole: a low bell
   SPEAK = (kind) => {
+    if (kind === 'pulse') {
+      // a deep beat, like a heart heard from inside
+      const t = ac.currentTime + 0.01, p = G(1, out, G(0.8, wet));
+      voice(p, 'sine', 58, t, 0.004, 0.12, 0.6, { glide: 0.55 }); voice(p, 'sine', 116, t, 0.004, 0.05, 0.12);
+      return;
+    }
     if (kind === 'expel') {
       // a deep, slow refusal
       const t = ac.currentTime + 0.02, p = G(1, out, G(2, wet));
