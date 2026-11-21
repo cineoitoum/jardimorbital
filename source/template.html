@@ -3,6 +3,11 @@
 <head>
 <meta charset=utf-8>
 <title>Jardim Orbital</title>
+<meta name=description content="Uma viagem em primeira pessoa por planetas pequenos de gravidade baixa, onde cada planeta é um sentimento de uma vida que o viajante não lembra. Por Gustavo Serrate.">
+<meta property=og:title content="Jardim Orbital">
+<meta property=og:description content="Uma experiência extracorpórea imersiva em 360°: planetas de gravidade baixa, almas que falam, um buraco negro e uma praia no fim.">
+<meta property=og:image content=jardim-orbital.jpg>
+<meta property=og:type content=website>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=theme-color content=#07040f>
 <style>
@@ -42,6 +47,14 @@ p { margin: 0; }
 #b { display: block; height: 100%; background: linear-gradient(90deg, #6a4cff, #4fe0e8); transform: scaleX(0); transform-origin: 0; will-change: transform; }
 .e #p { visibility: hidden; }
 .e #s { font-size: 1.1em; letter-spacing: 0; text-transform: none; }
+/* back to the site, and full screen */
+.back { display: inline-flex; padding: .55em 1.1em; font-size: .8em; background: #ffffff1a; color: #efe9ff; box-shadow: inset 0 0 0 1px #c9b6ff66; }
+#l .back { display: none; margin: 1.2em auto 0; width: max-content; }
+.e #l .back { display: inline-flex; }
+#tg { margin-top: -.6em; font: italic 300 1.15em/1.4 Georgia, 'Times New Roman', serif; color: #e8ddff; letter-spacing: .02em; text-shadow: 0 0 1em #000; }
+#tg small { font: 400 .62em system-ui, sans-serif; letter-spacing: .25em; text-transform: uppercase; color: #c9b6ffaa; }
+#z { display: flex; justify-content: center; gap: .6em; }
+#z button, #z a { padding: .55em 1.1em; font-size: .8em; background: #07040fb3; color: #efe9ff; box-shadow: inset 0 0 0 1px #c9b6ff55; }
 
 button, a {
   display: flex; align-items: center; justify-content: center; gap: .6em; padding: .8em 1.4em; border: 0;
@@ -142,16 +155,18 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
   <p><b>As falas</b>nascem de conversas reais da internet, no Reddit:<br>temas humanos reescritos e tirados de contexto de propósito</p>
   <p><b>Baseado em</b>Abyssal Garden, de Maksymilian Dendura (licença MIT)</p>
   <i>Obrigado por flutuar.</i>
-  <button id=again>Começar outra vez</button>
+  <p style="display:flex;gap:.8em;justify-content:center"><button id=again>Começar outra vez</button><a class=back style="pointer-events:auto" href=https://www.serrate.com.br/outros-projetos/>Voltar ao site</a></p>
 </div>
 <div id=m>
   <h1>Jardim Orbital</h1>
+  <p id=tg>Uma experiência extracorpórea imersiva em 360°<br><small>melhor com fones de ouvido, no escuro</small></p>
   <div id=a>
-    <div id=l><div id=p><i id=b></i></div><p id=s>Preparando…</p></div>
+    <div id=l><div id=p><i id=b></i></div><p id=s>Preparando…</p><a class=back href=https://www.serrate.com.br/outros-projetos/>Voltar ao site</a></div>
     <div id=g>
       <button id=d>Explorar</button>
       <p id=y><span>Sistema <b id=sd></b><br><span id=pn></span></span><button id=ns>Novo sistema</button></p>
       <p id=q><span>Detalhe</span><button>Baixo</button><button>Médio</button><button>Alto</button></p>
+      <p id=z><button id=fs>Tela cheia</button><a class=back href=https://www.serrate.com.br/outros-projetos/>Voltar ao site</a></p>
       <div id=k>
         <p>
           <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Andar, flutuando
@@ -164,6 +179,7 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
           <i><b>B</b></i>Respirar (segure)
           <i><b>J</b></i>Diário
           <i><b>P</b></i>Foto
+          <i><b>T</b></i>Tela cheia
           <i><b>1</b>–<b>5</b></i>Órbita dos planetas
           <i><b>Esc</b></i>Menu
           <i><b>M</b></i>Som
@@ -176,7 +192,7 @@ button:active { transform: translateY(.1em); filter: brightness(.9); }
 </div>
 <button id=o aria-label=Menu>≡</button>
 <pre id=i></pre>
-<div id=hk><b>WASD</b> andar · no ar, W segue para onde você olha<br><b>Shift</b> aura: voar para onde o mouse aponta · <b>W</b> acelera · <b>S</b> freia<br><b>Espaço</b> pular / planar<br><b>R</b> / botão direito: cordão até a luz mais próxima (depois, até o sol)<br><b>F</b> entrar na luz · <b>B</b> respirar · <b>J</b> diário · <b>P</b> foto<br><b>H</b> esconder esta cola</div>
+<div id=hk><b>WASD</b> andar · no ar, W segue para onde você olha<br><b>Shift</b> aura: voar para onde o mouse aponta · <b>W</b> acelera · <b>S</b> freia<br><b>Espaço</b> pular / planar<br><b>R</b> / botão direito: cordão até a luz mais próxima (depois, até o sol)<br><b>F</b> entrar na luz · <b>B</b> respirar · <b>J</b> diário · <b>P</b> foto · <b>T</b> tela cheia<br><b>H</b> esconder esta cola</div>
 <script>
 /*SCRIPT*/
 </script>

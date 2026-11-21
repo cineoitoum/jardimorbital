@@ -11,9 +11,12 @@ const say = (m, to, ms) => {
   return new Promise((r) => { a.ready.then(() => setTimeout(r)); setTimeout(r, document.hidden ? 0 : 1e3); });
 };
 const fail = (m) => { throw new Error(m, { cause: 1 }); };
-if (!navigator.gpu) fail('Este jogo precisa de WebGPU. Use um Chrome ou Edge atualizado.');
+// where "Voltar ao site" leads
+const SITE_URL = 'https://www.serrate.com.br/outros-projetos/';
+document.querySelectorAll('.back').forEach((a) => (a.href = SITE_URL));
+if (!navigator.gpu) fail('Esta experiência usa WebGPU. Abra no Chrome ou no Edge de um computador.');
 const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-if (!adapter) fail('Nenhum adaptador WebGPU encontrado.');
+if (!adapter) fail('Seu navegador não encontrou uma placa de vídeo compatível. Abra no Chrome ou no Edge de um computador.');
 const device = await adapter.requestDevice({ requiredLimits: { maxBufferSize: min(adapter.limits.maxBufferSize, 1 << 30), maxStorageBufferBindingSize: min(adapter.limits.maxStorageBufferBindingSize, 1 << 30) } });
 device.addEventListener('uncapturederror', (e) => console.error('GPU: ' + e.error.message));
 device.lost.then((l) => {
@@ -333,6 +336,7 @@ const key = (e, v) => {
       else if (e.code === 'KeyF') interact();
       else if (e.code === 'KeyJ') diary(!diaryOpen);
       else if (e.code === 'KeyP') photo();
+      else if (e.code === 'KeyT') fsToggle();
       else if (e.code === 'Escape') ui(true);
       else if (e.code >= 'Digit1' && e.code <= 'Digit9') { const i = e.code.charCodeAt(5) - 49; if (i < PL.length) spawn(i, true); }
     }
@@ -361,6 +365,12 @@ function ui(show) {
 }
 $('d').onclick = () => ui(false);
 $('o').onclick = () => ui(true);
+// full screen: the button in the menu, or T while playing
+const fsBtn = $('fs');
+const fsToggle = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().then(() => { if (!menu) capture(); }).catch(() => 0); };
+if (!document.fullscreenEnabled) fsBtn.hidden = true;
+fsBtn.onclick = fsToggle;
+document.addEventListener('fullscreenchange', () => { fsBtn.textContent = document.fullscreenElement ? 'Sair da tela cheia' : 'Tela cheia'; });
 $('again').onclick = () => { const u = new URL(location); u.searchParams.set('seed', (Math.random() * 1e6) | 0); location = u; };
 $('ns').onclick = () => { const u = new URL(location); u.searchParams.set('seed', (Math.random() * 1e6) | 0); location = u; };
 document.querySelectorAll('#q button').forEach((b, i) => {
