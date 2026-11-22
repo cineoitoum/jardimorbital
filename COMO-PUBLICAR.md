@@ -49,6 +49,7 @@ A pasta `arte/` tem imagens renderizadas pelo próprio jogo para usar no site e 
 
 ## Bom saber
 
-- A experiência usa **WebGPU**: funciona no **Chrome ou Edge de computador**. Em Safari, Firefox ou celular aparece um aviso com o botão de voltar ao site.
+- A experiência usa **WebGPU**: funciona no **Chrome ou Edge de computador**, no **Chrome do Android** atualizado e no **Safari do iPhone com iOS 26 ou mais novo**. Onde não há WebGPU (Firefox, celulares antigos) aparece um aviso com o botão de voltar ao site.
+- No celular o jogo detecta a tela de toque e mostra os controles sozinho: polegar à esquerda para andar, arrastar à direita para olhar, girar o celular para olhar em volta e botões para voar, pular, cordão e respirar.
 - Não use `iframe` para embutir o jogo numa página: a captura do mouse e a tela cheia podem não funcionar dentro de um iframe. O cartão linka para a página do jogo.
 - Para atualizar o jogo no futuro, basta substituir o `index.html` dentro da pasta. **Não substitua a pasta `dados/`**: é ela que guarda as mensagens recebidas.

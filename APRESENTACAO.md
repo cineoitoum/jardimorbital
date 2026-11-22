@@ -52,7 +52,7 @@ O projeto foi desenvolvido em colaboração com inteligência artificial e parte
 - **IA:** Claude (Anthropic): programação, shaders, geração procedural, música procedural, falas das almas e pensamentos
 - **Baseado em:** Abyssal Garden, de Maksymilian Dendura (licença MIT)
 - **Onde:** [www.serrate.com.br/jardim-orbital](https://www.serrate.com.br/jardim-orbital/)
-- **Requisitos:** computador com Chrome ou Edge atualizado (WebGPU). Melhor com fones de ouvido, no escuro e em tela cheia.
+- **Requisitos:** computador com Chrome ou Edge atualizado (WebGPU), ou celular recente (Chrome do Android, Safari do iOS 26+). Melhor com fones de ouvido, no escuro e em tela cheia.
 - **Controles essenciais:** mouse para olhar · WASD para andar · Shift para voar · F para entrar na luz · R para o fio de prata · H mostra ou esconde a lista de comandos
 
 ---
@@ -60,4 +60,4 @@ O projeto foi desenvolvido em colaboração com inteligência artificial e parte
 ## Versão curta (para o cartão e as redes)
 
 **Jardim Orbital: uma experiência extracorpórea imersiva em 360°.**
-Sem corpo e sem nome, um viajante atravessa pequenos planetas de gravidade baixa, cada um com um sentimento da vida que ele esqueceu: alegria, desejo, conquista, arrependimento, perda. Quadrados de luz abrem visões, almas falam, um buraco negro dobra a realidade, e no fim há um mar. Tudo gerado por código, ao vivo, no navegador. Para computador, com fones de ouvido e no escuro.
+Sem corpo e sem nome, um viajante atravessa pequenos planetas de gravidade baixa, cada um com um sentimento da vida que ele esqueceu: alegria, desejo, conquista, arrependimento, perda. Quadrados de luz abrem visões, almas falam, um buraco negro dobra a realidade, e no fim há um mar. Tudo gerado por código, ao vivo, no navegador. Para computador ou celular recente, com fones de ouvido e no escuro.

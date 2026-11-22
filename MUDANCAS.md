@@ -23,6 +23,19 @@ Um painel pequeno no canto inferior esquerdo, com os comandos um sobre o outro. 
 **Canto da tela**
 Os dados técnicos (velocidade, gravidade, fps) saíram da tela. Fica só a contagem "lembranças N de 5".
 
+**Celular e tablet**
+O jogo detecta a tela de toque e troca os comandos sozinho:
+- polegar no lado esquerdo: um joystick que aparece onde o dedo encosta, para andar e acelerar;
+- arrastar no lado direito: olhar;
+- girar o celular: olhar em volta, em 360° (o giroscópio liga e desliga no botão "Giro", que só aparece em aparelhos que têm o sensor);
+- botões redondos: **Voar** (segure, é a aceleração), **Pular** (dois toques escapam da órbita), **Cordão** e **Respirar** (segure);
+- perto de um quadrado de luz aparece "Toque aqui para olhar para dentro"; dentro da visão, um botão "Voltar";
+- no topo: Diário, Foto, Giro e o menu.
+
+O menu mostra instruções de toque no lugar das teclas e encolhe para caber no celular deitado. No Android o jogo entra em tela cheia e tenta travar na horizontal. No iPhone isso não existe, e em pé aparece um aviso: "Gire o celular para ver melhor". No iPhone, o próprio sistema pede permissão para usar o sensor de movimento quando a pessoa toca em "Explorar".
+
+Funciona em celulares recentes: Android com Chrome atualizado, ou iPhone com iOS 26 ou mais novo. Nos outros aparece um aviso explicando isso. A qualidade gráfica começa no nível Baixo no celular.
+
 ## O que fazer para publicar
 
 1. **Subir a pasta.** Envie a pasta `jardim-orbital` inteira do zip para `public_html`, substituindo a anterior. Ela agora tem `index.html`, `jardim-orbital.jpg`, `mensagem.php`, `mensagens.php`, `config.exemplo.php` e a pasta `dados/`. Confira se o arquivo oculto `dados/.htaccess` subiu. Os jeitos de subir (painel da hospedagem, WP File Manager ou FTP) estão em `COMO-PUBLICAR.md`.
@@ -43,3 +56,10 @@ O cartão (`cartao-outros-projetos.html`) não muda. Se quiser, acrescente à de
 Imagem nova para o portfólio: `arte/menu-inicial-1440x810.jpg` (o menu escuro).
 
 O texto completo de apresentação está em `APRESENTACAO.md`.
+
+## Testar no celular
+
+Abra https://www.serrate.com.br/jardim-orbital/ no seu celular e confira três coisas:
+1. **Desempenho:** se ficar lento ou esquentar, deixe no "Baixo" (já é o padrão).
+2. **Giroscópio:** girar o corpo para a esquerda deve virar a vista para a esquerda, e inclinar o celular para cima deve olhar para cima. Se algum dos dois estiver invertido ou rápido/lento demais, me diga o modelo do celular: é um ajuste de uma linha.
+3. **Botões:** se ficarem grandes, pequenos ou no lugar errado para o seu polegar.

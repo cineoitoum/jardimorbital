@@ -8,7 +8,7 @@
 <meta property=og:description content="Uma experiência extracorpórea imersiva em 360°: planetas de gravidade baixa, almas que falam, um buraco negro e uma praia no fim.">
 <meta property=og:image content=jardim-orbital.jpg>
 <meta property=og:type content=website>
-<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name=theme-color content=#07040f>
 <link rel=preconnect href=https://fonts.googleapis.com><link rel=preconnect href=https://fonts.gstatic.com crossorigin>
 <link rel=stylesheet href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap">
@@ -186,6 +186,52 @@ h1 { font: 300 3.9em/1 'Cormorant Garamond', Georgia, serif; letter-spacing: .14
 #k b { padding: .18em .45em; }
 #m #f a { padding: 0; background: none; box-shadow: none; letter-spacing: .04em; text-shadow: none; color: #c9b6ff; }
 #k h2 { grid-column: 1 / -1; margin: 0 0 .3em; font: 300 .9em 'Jost', system-ui, sans-serif; letter-spacing: .35em; color: #c9b6ff99; }
+
+/* touch screens (html.t): joystick, buttons, touch instructions */
+#tc, #jy, #kt, #rot { display: none; }
+html.t #k, html.t #hk { display: none !important; }
+html.t #kt { display: grid; }
+html.t canvas { touch-action: none; cursor: default; }
+html.t body { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+html.t .g #tc { display: block; }
+html.t body:has(#msg.on) #tc, html.t[data-s=x] #tc .play, html.t[data-s=v] #tc .play { display: none; }
+#tc { position: absolute; inset: 0; pointer-events: none; font-family: 'Jost', system-ui, sans-serif; }
+#tc button { position: absolute; display: grid; place-items: center; padding: 0; border-radius: 50%; pointer-events: auto; touch-action: none; font: 400 .62em/1.1 'Jost', system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: #f3eeff; background: #0d0920a6; box-shadow: inset 0 0 0 1px #c9b6ff66, 0 0 1em #8f73ff33; text-shadow: 0 0 .6em #c9b6ffcc; backdrop-filter: blur(4px); transition: transform .08s, box-shadow .12s; }
+#tc button:hover { transform: none; filter: none; }
+#tc button.dn { transform: scale(.93); background: #2a1d4acc; box-shadow: inset 0 0 0 1px #e2d8ff, 0 0 1.8em #8f73ff99; }
+#tfly { right: calc(20px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 96px; height: 96px; font-size: .8em !important; }
+#tjump { right: calc(132px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 68px; height: 68px; }
+#tcord { right: calc(124px + env(safe-area-inset-right)); bottom: calc(102px + env(safe-area-inset-bottom)); width: 60px; height: 60px; }
+#tbreath { right: calc(38px + env(safe-area-inset-right)); bottom: calc(134px + env(safe-area-inset-bottom)); width: 60px; height: 60px; }
+#tback { left: 0; right: 0; margin: auto; bottom: calc(1.4em + env(safe-area-inset-bottom)); width: max-content !important; height: auto !important; padding: .9em 1.6em !important; border-radius: 2em !important; display: none !important; }
+html.t[data-s=v] #tback { display: grid !important; }
+#tt { position: absolute; top: calc(.6em + env(safe-area-inset-top)); right: calc(3.4em + env(safe-area-inset-right)); display: flex; gap: .45em; pointer-events: none; }
+#tt button { position: static; width: auto; height: auto; padding: .7em 1em; border-radius: 2em; }
+#tt .off { opacity: .55; }
+#tg2 { display: none !important; }
+html.gy #tg2 { display: grid !important; }
+html.t .g #o { display: block; top: calc(.6em + env(safe-area-inset-top)); right: calc(.6em + env(safe-area-inset-right)); }
+#jy { position: absolute; width: 7em; height: 7em; margin: -3.5em 0 0 -3.5em; border-radius: 50%; box-shadow: inset 0 0 0 1px #c9b6ff55, 0 0 2em #8f73ff22; background: radial-gradient(#c9b6ff12, #0d092055); pointer-events: none; }
+#jy.on { display: block; }
+#jk { position: absolute; left: 50%; top: 50%; width: 2.8em; height: 2.8em; margin: -1.4em; border-radius: 50%; background: #e2d8ff40; box-shadow: inset 0 0 0 1px #e2d8ffaa, 0 0 1.2em #b9a3ff88; }
+html.t #pr.on { pointer-events: auto; }
+html.t #pr { padding: .9em 1.4em; bottom: 30%; }
+html.t #pr b { display: none; }
+html.t #pr::before { content: 'Toque aqui para '; }
+#kt { grid-template-columns: auto auto; gap: .5em .9em; padding: .9em 1.3em; border-radius: .7em; background: #0b0718b3; box-shadow: inset 0 0 0 1px #c9b6ff1f; font: 400 .68em/1.3 'Jost', system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #d8ceffcc; text-align: left; }
+#kt b, #kt span { white-space: nowrap; }
+#kt b { justify-self: end; font-weight: 500; color: #fff; text-shadow: 0 0 .5em #c9b6ffaa; }
+@media (max-height: 560px) {
+  html.t #m { gap: .55em; padding: .6em 1em; overflow-y: auto; place-content: safe center; }
+  html.t h1 { font-size: 2.5em; }
+  html.t #tg { margin-top: -.3em; font-size: 1em; }
+  html.t #pn, html.t #f, html.t #tg small, html.t #tg br { display: none; }
+  html.t #d { padding: .55em; font-size: 1.05em; }
+  html.t #kt { grid-template-columns: repeat(4, auto); padding: .6em 1em; gap: .35em .7em; }
+}
+@media (orientation: portrait) { html.t .g #rot { display: block; } }
+#rot { position: absolute; left: 0; right: 0; top: 30%; text-align: center; font: 300 .8em 'Jost', system-ui, sans-serif; letter-spacing: .3em; text-transform: uppercase; color: #fff; text-shadow: 0 0 1em #8f73ff; pointer-events: none; animation: rotfade 7s forwards; }
+@keyframes rotfade { 0%, 70% { opacity: .9; } 100% { opacity: 0; } }
 </style>
 </head>
 <body class=l>
@@ -195,6 +241,16 @@ h1 { font: 300 3.9em/1 'Cormorant Garamond', Georgia, serif; letter-spacing: .14
 <div id=t></div>
 <div id=th></div>
 <div id=pr><b>F</b> olhar para dentro</div>
+<div id=tc>
+  <div id=tt><button data-k=KeyJ class=play>Diário</button><button data-k=KeyP class=play>Foto</button><button id=tg2>Giro ligado</button></div>
+  <button id=tfly data-k=ShiftLeft class=play>Voar</button>
+  <button id=tjump data-k=Space class=play>Pular</button>
+  <button id=tcord data-k=KeyR class=play>Cordão</button>
+  <button id=tbreath data-k=KeyB class=play>Respirar</button>
+  <button id=tback data-k=KeyF>Voltar</button>
+</div>
+<div id=jy><i id=jk></i></div>
+<div id=rot>Gire o celular para ver melhor</div>
 <div id=vf></div>
 <div id=dy></div>
 <div id=msg><form autocomplete=off>
@@ -226,6 +282,15 @@ h1 { font: 300 3.9em/1 'Cormorant Garamond', Georgia, serif; letter-spacing: .14
       <p id=y><span>Sistema <b id=sd></b><br><span id=pn></span></span><button id=ns>Novo sistema</button></p>
       <p id=q><span>Detalhe</span><button>Baixo</button><button>Médio</button><button>Alto</button></p>
       <p id=z><button id=fs>Tela cheia</button><a class=back href=https://www.serrate.com.br/outros-projetos/>Voltar ao site</a></p>
+      <div id=kt>
+        <b>Polegar à esquerda</b><span>andar</span>
+        <b>Arrastar à direita</b><span>olhar</span>
+        <b>Girar o celular</b><span>olhar em volta</span>
+        <b>Voar</b><span>segure</span>
+        <b>Pular</b><span>2× escapa</span>
+        <b>Cordão</b><span>guia até a luz</span>
+        <b>Respirar</b><span>segure</span>
+      </div>
       <div id=k>
         <p>
           <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Andar

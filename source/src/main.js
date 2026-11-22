@@ -14,9 +14,11 @@ const fail = (m) => { throw new Error(m, { cause: 1 }); };
 // where "Voltar ao site" leads
 const SITE_URL = 'https://www.serrate.com.br/outros-projetos/';
 document.querySelectorAll('.back').forEach((a) => (a.href = SITE_URL));
-if (!navigator.gpu) fail('Esta experiência usa WebGPU. Abra no Chrome ou no Edge de um computador.');
+const MOB = matchMedia('(pointer:coarse)').matches;
+const NOGPU = MOB ? 'Este celular ainda não roda WebGPU. No Android, atualize o Chrome; no iPhone, use o Safari do iOS 26 ou mais novo. Ou abra no Chrome ou no Edge de um computador.' : 'Esta experiência usa WebGPU. Abra no Chrome ou no Edge de um computador.';
+if (!navigator.gpu) fail(NOGPU);
 const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-if (!adapter) fail('Seu navegador não encontrou uma placa de vídeo compatível. Abra no Chrome ou no Edge de um computador.');
+if (!adapter) fail(MOB ? NOGPU : 'Seu navegador não encontrou uma placa de vídeo compatível. Abra no Chrome ou no Edge de um computador.');
 const device = await adapter.requestDevice({ requiredLimits: { maxBufferSize: min(adapter.limits.maxBufferSize, 1 << 30), maxStorageBufferBindingSize: min(adapter.limits.maxStorageBufferBindingSize, 1 << 30) } });
 device.addEventListener('uncapturederror', (e) => console.error('GPU: ' + e.error.message));
 device.lost.then((l) => {
@@ -346,7 +348,7 @@ const key = (e, v) => {
 addEventListener('keydown', (e) => { if (msgOpen) return; if (menu && e.code !== 'KeyH' && e.code !== 'KeyM') return; sound(); key(e, 1); });
 addEventListener('keyup', (e) => key(e, 0));
 const release = () => { kf = kb = kl = kr = ku = kd = ks = kj = 0; cord.on = false; };
-const capture = () => { sound(); const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
+const capture = () => { sound(); if (touchMode) return; const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => canvas.requestPointerLock()).catch(() => 0); };
 canvas.addEventListener('click', () => { if (!menu && !shoreFree) capture(); });
 // at the end the mouse is free (to click the links); dragging looks around
 let shoreFree = false, dragging = false;
@@ -369,14 +371,79 @@ function ui(show) {
   if (show && document.pointerLockElement) document.exitPointerLock();
   if (!show) capture();
 }
-$('d').onclick = () => ui(false);
+$('d').onclick = () => { if (touchMode) { askGyro(); if (document.fullscreenEnabled && !document.fullscreenElement) document.documentElement.requestFullscreen().then(lockLand).catch(() => 0); } ui(false); };
 $('o').onclick = () => ui(true);
 // full screen: the button in the menu, or T while playing
 const fsBtn = $('fs');
-const fsToggle = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().then(() => { if (!menu) capture(); }).catch(() => 0); };
+const fsToggle = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().then(() => { lockLand(); if (!menu) capture(); }).catch(() => 0); };
 if (!document.fullscreenEnabled) fsBtn.hidden = true;
 fsBtn.onclick = fsToggle;
 document.addEventListener('fullscreenchange', () => { fsBtn.textContent = document.fullscreenElement ? 'Sair da tela cheia' : 'Tela cheia'; });
+// ============================================================================
+// touch screens: thumb joystick on the left, drag to look on the right, the gyroscope
+// (turn the phone to look around) and buttons that press the same keys as the keyboard
+// ============================================================================
+let touchMode = false;
+const setTouch = () => { if (touchMode) return; touchMode = true; document.documentElement.classList.add('t'); hud = false; $('hk').className = ''; };
+if (MOB) setTouch();
+addEventListener('touchstart', setTouch, { passive: true, capture: true });
+const lockLand = () => { if (touchMode && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => 0); };
+const LOOK_K = 1.8, GYRO_K = 1, JR = 56; // drag (in mouse units per pixel), gyroscope gain, joystick radius in px
+const joyEl = $('jy'), knobEl = $('jk'), fingers = new Map();
+const joyKeys = (dx, dy) => {
+  const m = hypot(dx, dy), a = m < 0.18 ? 0 : min(1, (m - 0.18) / 0.82) / m;
+  kf = max(0, -dy * a); kb = max(0, dy * a); kr = max(0, dx * a); kl = max(0, -dx * a);
+};
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch' || menu || msgOpen) return;
+  setTouch(); sound();
+  const joy = e.clientX < innerWidth * 0.42 && !shoreFree && !VISION && ![...fingers.values()].some((f) => f.joy);
+  fingers.set(e.pointerId, { joy, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
+  if (joy) { joyEl.style.left = e.clientX + 'px'; joyEl.style.top = e.clientY + 'px'; joyEl.className = 'on'; knobEl.style.transform = ''; }
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+});
+canvas.addEventListener('pointermove', (e) => {
+  const f = fingers.get(e.pointerId); if (!f) return;
+  if (f.joy) {
+    let dx = (e.clientX - f.x0) / JR, dy = (e.clientY - f.y0) / JR; const m = hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    knobEl.style.transform = `translate(${dx * JR}px, ${dy * JR}px)`; joyKeys(dx, dy);
+  } else { mdx += (e.clientX - f.x) * LOOK_K; mdy += (e.clientY - f.y) * LOOK_K; }
+  f.x = e.clientX; f.y = e.clientY;
+});
+const fingerUp = (e) => { const f = fingers.get(e.pointerId); if (!f) return; fingers.delete(e.pointerId); if (f.joy) { kf = kb = kl = kr = 0; joyEl.className = ''; } };
+canvas.addEventListener('pointerup', fingerUp); canvas.addEventListener('pointercancel', fingerUp);
+// on-screen buttons: each one holds a key while the finger is on it
+const press = (code, v) => key({ code, repeat: false, preventDefault() {} }, v);
+document.querySelectorAll('[data-k]').forEach((b) => {
+  const code = b.dataset.k; let held = false;
+  const up = () => { if (held) { held = false; b.classList.remove('dn'); press(code, 0); } };
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (menu || msgOpen) return; sound(); held = true; b.classList.add('dn'); try { b.setPointerCapture(e.pointerId); } catch {} press(code, 1); });
+  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+  b.addEventListener('contextmenu', (e) => e.preventDefault());
+});
+$('pr').addEventListener('pointerdown', (e) => { if (touchMode && !menu) { e.preventDefault(); interact(); } });
+// gyroscope: the turn rate of the phone, in its own axes, rotated to the screen and added to the look
+const gyroBtn = $('tg2');
+let gyroOn = true, gyroT = 0, gyroSeen = false;
+try { gyroOn = localStorage.planetasGyro !== '0'; } catch {}
+const gyroLabel = () => { gyroBtn.textContent = gyroOn ? 'Giro ligado' : 'Giro desligado'; gyroBtn.classList.toggle('off', !gyroOn); };
+gyroLabel();
+function askGyro() {
+  const D = window.DeviceMotionEvent;
+  if (gyroOn && D && typeof D.requestPermission === 'function') D.requestPermission().catch(() => 0); // refused: no events arrive and the Giro button stays hidden
+}
+gyroBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); gyroOn = !gyroOn; try { localStorage.planetasGyro = gyroOn ? '1' : '0'; } catch {} gyroLabel(); askGyro(); });
+addEventListener('devicemotion', (e) => {
+  const r = e.rotationRate; if (!r || r.beta == null || r.gamma == null) return;
+  const now = performance.now(), dt = min(0.1, (now - gyroT) / 1000); gyroT = now;
+  if (!gyroSeen && (r.beta || r.gamma)) { gyroSeen = true; document.documentElement.classList.add('gy'); }
+  if (!gyroOn || !touchMode || menu || msgOpen || dt <= 0) return;
+  const th = ((screen.orientation ? screen.orientation.angle : window.orientation) || 0) * PI / 180;
+  const wx = r.beta * PI / 180, wy = r.gamma * PI / 180;
+  let sx = wx * cos(th) - wy * sin(th), sy = wx * sin(th) + wy * cos(th);
+  sx = abs(sx) < 0.03 ? 0 : sx; sy = abs(sy) < 0.03 ? 0 : sy; // hold still without drifting
+  mdx -= sy * dt * GYRO_K / 0.0022; mdy -= sx * dt * GYRO_K / 0.0022;
+});
 $('again').onclick = () => { const u = new URL(location); u.searchParams.set('seed', (Math.random() * 1e6) | 0); location = u; };
 $('ns').onclick = () => { const u = new URL(location); u.searchParams.set('seed', (Math.random() * 1e6) | 0); location = u; };
 document.querySelectorAll('#q button').forEach((b, i) => {
@@ -1208,6 +1275,7 @@ function frame(now) {
   // the planet's name when you arrive on it
   if (!menu && !VISION && groundT > 0 && near !== lastNear) { const p = PL[near]; lastNear = near; label.textContent = `${p.name} · ${STORY[p.feel].name} · ${p.g.toFixed(1)} m/s²`; label.className = 'on'; labelT = 5; }
   promptEl.className = !menu && !VISION && END.stage === 'play' && !trav && nearBeacon() ? 'on' : '';
+  if (touchMode) document.documentElement.dataset.s = VISION ? 'v' : END.stage !== 'play' || trav ? 'x' : '';
   if (labelT > 0 && (labelT -= dt) <= 0) label.className = '';
   if (hud && !DEBUG) { const t = menu || VISION || END.stage !== 'play' ? '' : `lembranças ${PL.filter((p) => p.done).length} de ${PL.length}`; if (info.textContent !== t) info.textContent = t; }
   if (hud && DEBUG) {
@@ -1258,5 +1326,5 @@ function lookFrom(from, to) {
   const yaw = atan2(dot3(cross3(f, h), up), dot3(f, h));
   B = qnorm(qmul(B, [0, sin(yaw / 2), 0, cos(yaw / 2)])); pitch = Math.asin(clamp(dot3(dir, up), -1, 1)); groundT = 0;
 }
-window.__game = { setBreath: (b) => { breath = b; }, get shoreFree() { return shoreFree; }, openMsg, get msgOpen() { return msgOpen; }, setPlayTime: (t) => { playTime = t; }, get pulse() { return [endPulse, pulseVal, pulsePh]; }, markDone: (n) => { PL.slice(0, n).forEach((p) => (p.done = true)); }, get expel() { return expel; }, idle: (dt) => idleUpdate(dt), get idleT() { return idleT; }, vision: (f) => enterVision(f), leave: () => leaveVision(), beacons: () => PL.map((p) => [p.feel, !!p.beacon]), nearBeacon: () => { const p = nearBeacon(); return p && p.feel; }, interact, diaryOpen: (o) => diary(o), get breath() { return breath; }, shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); updateBurst(dt); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
+window.__game = { get mdx() { return mdx; }, get touchMode() { return touchMode; }, get kf() { return kf; }, get ks() { return ks; }, get pitch() { return pitch; }, get B() { return B; }, setBreath: (b) => { breath = b; }, get shoreFree() { return shoreFree; }, openMsg, get msgOpen() { return msgOpen; }, setPlayTime: (t) => { playTime = t; }, get pulse() { return [endPulse, pulseVal, pulsePh]; }, markDone: (n) => { PL.slice(0, n).forEach((p) => (p.done = true)); }, get expel() { return expel; }, idle: (dt) => idleUpdate(dt), get idleT() { return idleT; }, vision: (f) => enterVision(f), leave: () => leaveVision(), beacons: () => PL.map((p) => [p.feel, !!p.beacon]), nearBeacon: () => { const p = nearBeacon(); return p && p.feel; }, interact, diaryOpen: (o) => diary(o), get breath() { return breath; }, shoreInfo: () => SHORE && { seated: SHORE.sn, mush: SHORE.pn, threads: SHORE.tnn }, END, SUN, get stage() { return END.stage; }, shoreNow: async () => { END.crossed = true; startCorridor(); await shoreGen; enterShore(); }, waitShore: () => shoreGen, peace: (n) => peaceThoughts(n), proj: (x, y, z) => { const m = lastVP, w = m[3] * x + m[7] * y + m[11] * z + m[15]; return [((m[0] * x + m[4] * y + m[8] * z + m[12]) / w * 0.5 + 0.5) * W, (0.5 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w * 0.5) * H, w]; }, press: (code, v) => key({ code, repeat: false, preventDefault() {} }, v), cast: () => castCord(qrot(qmul(B, [sin(pitch / 2), 0, 0, cos(pitch / 2)]), [0, 0, -1])), cord, BH, get trav() { return trav; }, get aura() { return aura; }, talkText: () => talkEl.textContent, souls, frameStep: (dt) => { const cq = step(dt); time += dt; uniforms(cq); if (cord.on) updateCord(cq); updateBurst(dt); talkUpdate(dt); flash = max(0, flash - dt * 0.6); }, lookFrom, seated: () => PL.flatMap((p) => p.seatedPos.map((s) => ({ p: s.p, u: s.u, f: s.f }))), spiritAt: (i) => orbitAt(spiritArr, i * 16, time, [0, 0, 0]), get time() { return time; }, freeze: () => { time = 1000; }, up: () => qrot(B, [0, 1, 0]), view: (i, pt, orbit = true) => { spawn(i, orbit); pitch = pt; }, setPitch: (pt) => { pitch = pt; }, snap, readTex: async (n, x, y) => readTex(n === 'bl' ? T.bl[0] : T[n], x, y), dbg: () => ({ UG: Array.from(UG), B, pitch, W, H, scale }), PL, pos, vel, spawn, step: (n, dt) => { for (let i = 0; i < n; i++) step(dt); }, setMenu: (m) => { menu = m; body.className = m ? 'm' : 'g'; }, keys: (o) => { if ('f' in o) kf = o.f; if ('j' in o) { if (o.j && !kj) jumpReq = 1; kj = o.j; } if ('s' in o) ks = o.s; }, look: (dx, dy) => { mdx += dx; mdy += dy; }, get groundT() { return groundT; } };
 requestAnimationFrame(frame);
